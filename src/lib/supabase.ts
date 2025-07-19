@@ -1,8 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Tillfällig konfiguration för utveckling - ersätt med dina riktiga uppgifter
-const supabaseUrl = 'https://demo.supabase.co';
-const supabaseKey = 'demo-key';
+// Supabase konfiguration från miljövariabler
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Supabase URL och anon key måste vara konfigurerade i .env filen');
+}
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
