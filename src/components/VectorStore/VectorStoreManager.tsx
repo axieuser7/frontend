@@ -91,7 +91,15 @@ export function VectorStoreManager() {
         .single();
 
       if (apiKey) {
+        // Validate API key format
+        if (!apiKey.key_encrypted || !apiKey.key_encrypted.startsWith('sk-')) {
+          setError('Ogiltig OpenAI API-nyckel format. Nyckeln måste börja med "sk-".');
+          return;
+        }
         vectorService.setOpenAIKey(apiKey.key_encrypted);
+      } else {
+        setError('Ingen aktiv OpenAI API-nyckel hittades. Gå till "API-nycklar" och lägg till en giltig OpenAI API-nyckel först.');
+        return;
       }
     } catch (err) {
       console.error('Error initializing vector service:', err);
@@ -100,81 +108,7 @@ export function VectorStoreManager() {
   };
 
   const createVectorTables = async () => {
-    if (!selectedConfig) return;
-
-    setIsCreatingTables(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      const result = await vectorService.createVectorTables(
-        selectedConfig.project_url,
-        selectedConfig.service_role_key || selectedConfig.anon_key
-      );
-
-      if (result.success) {
-        setSuccess('Vector-tabeller skapade framgångsrikt!');
-        setTablesCreated(true);
-        
-        // Create the search function
-        await createSearchFunction();
-      } else {
-        setError(`Fel vid skapande av tabeller: ${result.error}`);
-      }
-    } catch (err) {
-      console.error('Error creating vector tables:', err);
-      setError('Kunde inte skapa vector-tabeller');
-    } finally {
-      setIsCreatingTables(false);
-    }
-  };
-
-  const createSearchFunction = async () => {
-    if (!selectedConfig) return;
-
-    try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const adminClient = createClient(
-        selectedConfig.project_url, 
-        selectedConfig.service_role_key || selectedConfig.anon_key
-      );
-
-      const searchFunctionSQL = `
-        CREATE OR REPLACE FUNCTION search_documents(
-          query_embedding vector(1536),
-          match_threshold float DEFAULT 0.7,
-          match_count int DEFAULT 5
-        )
-        RETURNS TABLE (
-          id uuid,
-          content text,
-          source text,
-          metadata jsonb,
-          similarity float
-        )
-        LANGUAGE sql STABLE
-        AS $$
-          SELECT
-            documents.id,
-            documents.content,
-            documents.source,
-            documents.metadata,
-            1 - (documents.embedding <=> query_embedding) AS similarity
-          FROM documents
-          WHERE 1 - (documents.embedding <=> query_embedding) > match_threshold
-          ORDER BY documents.embedding <=> query_embedding
-          LIMIT match_count;
-        $$;
-      `;
-
-      const { error } = await adminClient.rpc('exec_sql', { sql: searchFunctionSQL });
-      
-      if (error) {
-        console.error('Error creating search function:', error);
-      }
-    } catch (err) {
-      console.error('Error creating search function:', err);
-    }
+    setError('Vector-tabeller måste skapas manuellt. Se instruktionerna nedan för hur du gör detta i Supabase SQL Editor.');
   };
 
   const loadDocuments = async () => {
@@ -190,10 +124,18 @@ export function VectorStoreManager() {
   const handleAddDocument = async () => {
     if (!newDocument.content.trim()) return;
 
+    setError('');
+    setSuccess('');
+
     try {
       let metadata = {};
       if (newDocument.metadata.trim()) {
-        metadata = JSON.parse(newDocument.metadata);
+        try {
+          metadata = JSON.parse(newDocument.metadata);
+        } catch (parseError) {
+          setError('Ogiltig JSON i metadata-fältet');
+          return;
+        }
       }
 
       const result = await vectorService.addDocument(
@@ -207,6 +149,7 @@ export function VectorStoreManager() {
         setNewDocument({ content: '', source: '', metadata: '{}' });
         setShowAddDocument(false);
         loadDocuments();
+        setTimeout(() => setSuccess(''), 3000);
       } else {
         setError(`Fel vid tillägg av dokument: ${result.error}`);
       }
@@ -217,12 +160,16 @@ export function VectorStoreManager() {
   };
 
   const handleDeleteDocument = async (documentId: string) => {
+    setError('');
+    setSuccess('');
+    
     try {
       const result = await vectorService.deleteDocument(documentId);
       
       if (result.success) {
         setSuccess('Dokument borttaget framgångsrikt!');
         loadDocuments();
+        setTimeout(() => setSuccess(''), 3000);
       } else {
         setError(`Fel vid borttagning av dokument: ${result.error}`);
       }
@@ -235,10 +182,16 @@ export function VectorStoreManager() {
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
 
+    setError('');
     setIsSearching(true);
+    
     try {
       const results = await vectorService.searchSimilarDocuments(searchQuery, 5, 0.7);
       setSearchResults(results);
+      
+      if (results.length === 0) {
+        setError('Inga resultat hittades för din sökning.');
+      }
     } catch (err) {
       console.error('Error searching documents:', err);
       setError('Kunde inte söka i dokument');
@@ -355,28 +308,72 @@ export function VectorStoreManager() {
               </div>
 
               {selectedConfig && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h3 className="font-semibold text-blue-900 mb-2">Skapa Vector-tabeller</h3>
-                  <p className="text-blue-800 text-sm mb-4">
-                    Klicka för att automatiskt skapa de nödvändiga tabellerna för vector search i ditt Supabase-projekt.
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <h3 className="font-semibold text-amber-900 mb-2">⚠️ Manuell Setup Krävs</h3>
+                  <p className="text-amber-800 text-sm mb-4">
+                    Vector-tabeller måste skapas manuellt i ditt Supabase-projekt. Följ dessa steg:
                   </p>
-                  <button
-                    onClick={createVectorTables}
-                    disabled={isCreatingTables}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
-                  >
-                    {isCreatingTables ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Skapar tabeller...
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="w-4 h-4 mr-2" />
-                        Skapa Vector-tabeller
-                      </>
-                    )}
-                  </button>
+                  <div className="bg-white rounded-lg p-4 mb-4 text-sm">
+                    <ol className="list-decimal list-inside space-y-2 text-gray-700">
+                      <li>Gå till din Supabase-projektdashboard</li>
+                      <li>Öppna "SQL Editor"</li>
+                      <li>Aktivera pgvector-tillägget: <code className="bg-gray-100 px-1 rounded">CREATE EXTENSION IF NOT EXISTS vector;</code></li>
+                      <li>Kör följande SQL för att skapa tabeller och funktioner:</li>
+                    </ol>
+                  </div>
+                  <div className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs font-mono overflow-x-auto mb-4">
+                    <pre>{`-- Skapa documents-tabellen
+CREATE TABLE IF NOT EXISTS documents (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    content text NOT NULL,
+    embedding vector(1536) NOT NULL,
+    source text,
+    metadata jsonb,
+    created_at timestamptz DEFAULT now()
+);
+
+-- Skapa index för snabb sökning
+CREATE INDEX IF NOT EXISTS idx_documents_embedding
+ON documents USING ivfflat (embedding vector_cosine_ops)
+WITH (lists = 100);
+
+-- Aktivera RLS
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+
+-- Skapa policies
+CREATE POLICY "Enable all operations for authenticated users" 
+ON documents FOR ALL TO authenticated USING (true);
+
+-- Skapa sökfunktion
+CREATE OR REPLACE FUNCTION search_documents(
+  query_embedding vector(1536),
+  match_threshold float DEFAULT 0.7,
+  match_count int DEFAULT 5
+)
+RETURNS TABLE (
+  id uuid,
+  content text,
+  source text,
+  metadata jsonb,
+  similarity float
+)
+LANGUAGE sql STABLE
+AS $$
+  SELECT
+    documents.id,
+    documents.content,
+    documents.source,
+    documents.metadata,
+    1 - (documents.embedding <=> query_embedding) AS similarity
+  FROM documents
+  WHERE 1 - (documents.embedding <=> query_embedding) > match_threshold
+  ORDER BY documents.embedding <=> query_embedding
+  LIMIT match_count;
+$$;`}</pre>
+                  </div>
+                  <p className="text-amber-800 text-sm">
+                    Efter att du har kört SQL-koden ovan kan du börja lägga till dokument.
+                  </p>
                 </div>
               )}
             </div>
@@ -438,6 +435,9 @@ export function VectorStoreManager() {
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors font-mono text-sm"
                       placeholder='{"category": "support", "priority": "high"}'
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Exempel: {`{"category": "FAQ", "topic": "billing"}`}
+                    </p>
                   </div>
                   <div className="flex space-x-3">
                     <button
@@ -585,10 +585,34 @@ export function VectorStoreManager() {
           <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-200">
             <h4 className="font-semibold text-blue-900 mb-3">💡 Tips</h4>
             <div className="space-y-2 text-blue-800 text-sm">
+              <p>• Kör SQL-skriptet manuellt i Supabase SQL Editor först</p>
+              <p>• Se till att pgvector-tillägget är aktiverat</p>
+              <p>• Lägg till en giltig OpenAI API-nyckel (börjar med "sk-")</p>
               <p>• Lägg till dokument med relevant företagsinformation</p>
               <p>• Använd beskrivande källor för bättre organisation</p>
               <p>• Vector search hittar semantiskt liknande innehåll</p>
               <p>• Metadata hjälper till att kategorisera dokument</p>
+            </div>
+          </div>
+          
+          {/* Status Panel */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h4 className="font-semibold text-gray-900 mb-3">📊 Status</h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Dokument:</span>
+                <span className="font-medium">{documents.length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Projekt:</span>
+                <span className="font-medium">{selectedConfig?.project_name || 'Inget valt'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Vector Search:</span>
+                <span className={`font-medium ${documents.length > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                  {documents.length > 0 ? 'Aktivt' : 'Inaktivt'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
