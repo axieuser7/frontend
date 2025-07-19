@@ -11,6 +11,7 @@ export interface BotConfig {
   name: string;
   system_prompt: string;
   tone: 'friendly' | 'professional' | 'casual' | 'formal';
+  personality?: string;
   primary_color: string;
   avatar_url?: string;
   welcome_message: string;
@@ -45,13 +46,60 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   timestamp: Date;
   context?: string;
+  metadata?: {
+    provider?: string;
+    model?: string;
+    tokens?: number;
+    confidence?: number;
+  };
 }
 
 export interface KnowledgeBase {
   id: string;
   user_id: string;
   content: string;
-  embedding: number[];
-  metadata: Record<string, any>;
+  embedding?: number[];
+  metadata?: Record<string, any>;
+  source?: string;
+  title?: string;
+  category?: string;
   created_at: string;
+  updated_at?: string;
+}
+
+export interface ChatSession {
+  id: string;
+  user_id: string;
+  bot_config_id: string;
+  title?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WidgetConfig {
+  widgetId: string;
+  baseUrl: string;
+  position: 'bottom-right' | 'bottom-left';
+  sessionId?: string;
+  theme?: {
+    primaryColor?: string;
+    borderRadius?: string;
+    fontFamily?: string;
+  };
+  behavior?: {
+    autoOpen?: boolean;
+    showWelcomeMessage?: boolean;
+    enableTypingIndicator?: boolean;
+    enableSoundNotifications?: boolean;
+  };
+}
+
+export interface DeploymentConfig {
+  platform: 'html' | 'react' | 'wordpress' | 'shopify' | 'custom';
+  widgetId: string;
+  customizations?: {
+    css?: string;
+    javascript?: string;
+    analytics?: boolean;
+  };
 }

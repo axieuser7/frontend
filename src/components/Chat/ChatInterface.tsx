@@ -1,13 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { Send, Bot, User, Sparkles, Zap, MessageSquare, RotateCcw } from 'lucide-react';
-import { ChatMessage } from '../../types';
+import { ChatMessage, BotConfig, ApiKey } from '../../types';
 import { RAGService } from '../../lib/ragService';
 
 export function ChatInterface() {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      content: 'Hej! Jag är din AI-assistent. Hur kan jag hjälpa dig idag? 🤖',
+      content: 'Hej! Jag är din AI-assistent. Hur kan jag hjälpa dig idag?',
       role: 'assistant',
       timestamp: new Date(),
     }
@@ -15,16 +18,18 @@ export function ChatInterface() {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [botConfig, setBotConfig] = useState<BotConfig | null>(null);
+  const [apiKey, setApiKey] = useState<ApiKey | null>(null);
+  const [configLoading, setConfigLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const ragService = new RAGService();
 
-  const botConfig = {
-    name: 'AI Assistant',
-    system_prompt: 'Du är en hjälpsam AI-assistent som svarar på svenska och hjälper användare med deras frågor.',
-    tone: 'friendly',
-    first_message: 'Hej! Jag är din AI-assistent. Hur kan jag hjälpa dig idag?',
-    primary_color: '#2563EB',
-  };
+  // Load user's bot config and API keys
+  useEffect(() => {
+    if (user) {
+      loadUserConfiguration();
+    }
+  }, [user]);
 
   const quickSuggestions = [
     "Vad kan du hjälpa mig med?",
@@ -32,6 +37,53 @@ export function ChatInterface() {
     "Hur fungerar AI-chatbots?",
     "Ge mig tips för bättre kundservice"
   ];
+
+  const loadUserConfiguration = async () => {
+    try {
+      setConfigLoading(true);
+      
+      // Load bot configuration
+      const { data: configData, error: configError } = await supabase
+        .from('bot_configs')
+        .select('*')
+        .eq('user_id', user!.id)
+        .single();
+
+      if (configError && configError.code !== 'PGRST116') {
+        throw configError;
+      }
+
+      if (configData) {
+        setBotConfig(configData);
+        // Update welcome message
+        setMessages([{
+          id: '1',
+          content: configData.first_message || configData.welcome_message || 'Hej! Jag är din AI-assistent. Hur kan jag hjälpa dig idag?',
+          role: 'assistant',
+          timestamp: new Date(),
+        }]);
+      }
+
+      // Load active API key
+      const { data: keyData, error: keyError } = await supabase
+        .from('api_keys')
+        .select('*')
+        .eq('user_id', user!.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!keyError && keyData) {
+        setApiKey(keyData);
+      }
+
+    } catch (error) {
+      console.error('Error loading user configuration:', error);
+    } finally {
+      setConfigLoading(false);
+    }
+  };
 
   useEffect(() => {
     scrollToBottom();
@@ -58,59 +110,25 @@ export function ChatInterface() {
     setIsTyping(true);
 
     try {
-      // Simulate typing delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Generate response based on message content
       let response = '';
-      const lowerMessage = textToSend.toLowerCase();
-      
-      if (lowerMessage.includes('hjälpa') || lowerMessage.includes('funktioner')) {
-        response = `Som ${botConfig.name} kan jag hjälpa dig med många saker! 🚀
 
-• Svara på frågor om ditt företag
-• Ge kundservice 24/7
-• Hantera vanliga förfrågningar
-• Guida användare genom processer
-• Samla in feedback och information
-
-Jag är tränad att vara ${botConfig.tone === 'friendly' ? 'vänlig och hjälpsam' : 'professionell och effektiv'} i alla interaktioner. Vad skulle du vilja veta mer om?`;
-      } else if (lowerMessage.includes('ai') || lowerMessage.includes('chatbot')) {
-        response = `AI-chatbots som jag fungerar genom att använda avancerad språkteknologi! 🧠
-
-**Så här fungerar det:**
-1. **Naturlig språkförståelse** - Jag förstår vad du menar, inte bara vad du skriver
-2. **Kontextuell kunskap** - Jag kommer ihåg vår konversation och kan bygga på tidigare svar
-3. **Anpassad personlighet** - Jag kan anpassas för olika branscher och tonfall
-4. **Kontinuerlig förbättring** - Jag lär mig från varje interaktion
-
-Vill du veta mer om någon specifik del?`;
-      } else if (lowerMessage.includes('kundservice') || lowerMessage.includes('tips')) {
-        response = `Här är mina bästa tips för excellent kundservice! ⭐
-
-**🎯 Viktiga principer:**
-• **Lyssna aktivt** - Förstå kundens verkliga behov
-• **Var proaktiv** - Förutse och lös problem innan de uppstår
-• **Personalisera** - Behandla varje kund som en individ
-• **Följ upp** - Se till att kunden är nöjd med lösningen
-
-**🤖 Hur AI kan hjälpa:**
-• Snabba svar 24/7
-• Konsekvent kvalitet
-• Hantera flera kunder samtidigt
-• Samla in värdefull feedback
-
-Vill du diskutera någon specifik utmaning du har?`;
+      // Use real AI if configured, otherwise fallback to demo responses
+      if (botConfig && apiKey && user) {
+        try {
+          response = await ragService.enhancedContextualResponse(
+            textToSend,
+            botConfig,
+            user.id,
+            apiKey.key_encrypted, // In production, decrypt this
+            apiKey.provider as 'openai' | 'claude' | 'groq'
+          );
+        } catch (aiError) {
+          console.error('AI response failed, using fallback:', aiError);
+          response = generateFallbackResponse(textToSend, botConfig);
+        }
       } else {
-        response = `Tack för din fråga! Som en demo-version av ${botConfig.name} ger jag exempel-svar baserat på din konfiguration.
-
-I en riktig implementation skulle jag:
-• Använda din specifika kunskapsbas
-• Ansluta till dina AI-tjänster (OpenAI, Claude, etc.)
-• Ge mer exakta och anpassade svar
-• Komma ihåg tidigare konversationer
-
-${botConfig.tone === 'friendly' ? 'Är det något annat jag kan hjälpa dig med? 😊' : 'Hur kan jag assistera er vidare?'}`;
+        // Demo mode fallback
+        response = generateFallbackResponse(textToSend, botConfig);
       }
 
       setIsTyping(false);
@@ -128,7 +146,7 @@ ${botConfig.tone === 'friendly' ? 'Är det något annat jag kan hjälpa dig med?
       setIsTyping(false);
       const errorResponse: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        content: 'Ursäkta, jag kunde inte behandla din förfrågan just nu. Försök igen senare. 😔',
+        content: 'Ursäkta, jag kunde inte behandla din förfrågan just nu. Försök igen senare.',
         role: 'assistant',
         timestamp: new Date(),
       };
@@ -138,14 +156,82 @@ ${botConfig.tone === 'friendly' ? 'Är det något annat jag kan hjälpa dig med?
     }
   };
 
+  const generateFallbackResponse = (message: string, config: BotConfig | null): string => {
+    const lowerMessage = message.toLowerCase();
+    const botName = config?.name || 'AI Assistant';
+    const tone = config?.tone || 'friendly';
+    
+    if (lowerMessage.includes('hjälpa') || lowerMessage.includes('funktioner')) {
+      return `Som ${botName} kan jag hjälpa dig med många saker!
+
+• Svara på frågor om ditt företag
+• Ge kundservice 24/7
+• Hantera vanliga förfrågningar
+• Guida användare genom processer
+• Samla in feedback och information
+
+Jag är tränad att vara ${tone === 'friendly' ? 'vänlig och hjälpsam' : 'professionell och effektiv'} i alla interaktioner. Vad skulle du vilja veta mer om?`;
+    } else if (lowerMessage.includes('ai') || lowerMessage.includes('chatbot')) {
+      return `AI-chatbots som jag fungerar genom att använda avancerad språkteknologi!
+
+**Så här fungerar det:**
+1. **Naturlig språkförståelse** - Jag förstår vad du menar, inte bara vad du skriver
+2. **Kontextuell kunskap** - Jag kommer ihåg vår konversation och kan bygga på tidigare svar
+3. **Anpassad personlighet** - Jag kan anpassas för olika branscher och tonfall
+4. **Kontinuerlig förbättring** - Jag lär mig från varje interaktion
+
+Vill du veta mer om någon specifik del?`;
+    } else if (lowerMessage.includes('kundservice') || lowerMessage.includes('tips')) {
+      return `Här är mina bästa tips för excellent kundservice!
+
+**Viktiga principer:**
+• **Lyssna aktivt** - Förstå kundens verkliga behov
+• **Var proaktiv** - Förutse och lös problem innan de uppstår
+• **Personalisera** - Behandla varje kund som en individ
+• **Följ upp** - Se till att kunden är nöjd med lösningen
+
+**Hur AI kan hjälpa:**
+• Snabba svar 24/7
+• Konsekvent kvalitet
+• Hantera flera kunder samtidigt
+• Samla in värdefull feedback
+
+Vill du diskutera någon specifik utmaning du har?`;
+    } else {
+      const configStatus = config && apiKey ? 'riktig AI-integration' : 'demo-läge';
+      return `Tack för din fråga! ${configStatus === 'demo-läge' ? `Som en demo-version av ${botName} ger jag exempel-svar baserat på din konfiguration.` : ''}
+
+${configStatus === 'demo-läge' ? `I en riktig implementation skulle jag:
+• Använda din specifika kunskapsbas
+• Ansluta till dina AI-tjänster (OpenAI, Claude, etc.)
+• Ge mer exakta och anpassade svar` : 'Jag använder din konfigurerade AI-tjänst och kunskapsbas för att ge dig bästa möjliga svar.'}
+
+${tone === 'friendly' ? 'Är det något annat jag kan hjälpa dig med?' : 'Hur kan jag assistera er vidare?'}`;
+    }
+  };
+
   const resetChat = () => {
+    const welcomeMessage = botConfig?.first_message || botConfig?.welcome_message || 'Hej! Jag är din AI-assistent. Hur kan jag hjälpa dig idag?';
     setMessages([{
       id: '1',
-      content: 'Hej! Jag är din AI-assistent. Hur kan jag hjälpa dig idag? 🤖',
+      content: welcomeMessage,
       role: 'assistant',
       timestamp: new Date(),
     }]);
   };
+
+  if (configLoading) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/3 mb-6"></div>
+            <div className="h-64 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -157,14 +243,14 @@ ${botConfig.tone === 'friendly' ? 'Är det något annat jag kan hjälpa dig med?
               <Bot className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold">Testa din AI-chatbot</h2>
+              <h2 className="text-2xl font-bold">Testa {botConfig?.name || 'din AI-chatbot'}</h2>
               <p className="text-blue-100">Se hur din assistent svarar på frågor</p>
             </div>
           </div>
           <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-2 bg-white/20 rounded-lg px-3 py-2">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium">Online</span>
+            <div className={`flex items-center space-x-2 bg-white/20 rounded-lg px-3 py-2`}>
+              <div className={`w-2 h-2 rounded-full animate-pulse ${apiKey ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
+              <span className="text-sm font-medium">{apiKey ? 'AI Aktiv' : 'Demo-läge'}</span>
             </div>
             <button
               onClick={resetChat}
@@ -320,16 +406,27 @@ ${botConfig.tone === 'friendly' ? 'Är det något annat jag kan hjälpa dig med?
       </div>
 
       {/* Info Panel */}
-      <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-6">
+      <div className={`mt-6 border rounded-xl p-6 ${apiKey ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
         <h3 className="font-semibold text-blue-900 mb-3 flex items-center">
           <Bot className="w-5 h-5 mr-2" />
-          Om denna demo
+          {apiKey ? 'Live AI-chatbot' : 'Demo-läge'}
         </h3>
-        <div className="space-y-2 text-blue-800 text-sm">
-          <p>• Detta är en demo av din chatbot med fördefinierade svar</p>
-          <p>• I produktion använder boten dina API-nycklar och kunskapsbas</p>
-          <p>• Konfigurera din bot under "Konfiguration" för att anpassa beteendet</p>
-          <p>• Lägg till API-nycklar under "AI-Nycklar" för att aktivera riktig AI</p>
+        <div className={`space-y-2 text-sm ${apiKey ? 'text-green-800' : 'text-blue-800'}`}>
+          {apiKey ? (
+            <>
+              <p>• Din chatbot använder {apiKey.provider.toUpperCase()} för AI-svar</p>
+              <p>• Kunskapsbas och företagsinformation integreras automatiskt</p>
+              <p>• Alla svar genereras i realtid baserat på din konfiguration</p>
+              <p>• Redo för produktion och inbäddning på din webbplats</p>
+            </>
+          ) : (
+            <>
+              <p>• Detta är en demo av din chatbot med fördefinierade svar</p>
+              <p>• Lägg till API-nycklar under "AI-Nycklar" för att aktivera riktig AI</p>
+              <p>• Konfigurera din bot under "Konfiguration" för att anpassa beteendet</p>
+              <p>• Anslut din kunskapsbas under "Supabase-konfiguration"</p>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -93,28 +93,28 @@ export function BotConfig() {
       value: 'friendly', 
       label: 'Vänlig', 
       description: 'Varm och tillmötesgående',
-      icon: '😊',
+      icon: 'Friendly',
       color: 'bg-green-100 text-green-800'
     },
     { 
       value: 'professional', 
       label: 'Professionell', 
       description: 'Formell och saklig',
-      icon: '💼',
+      icon: 'Professional',
       color: 'bg-blue-100 text-blue-800'
     },
     { 
       value: 'casual', 
       label: 'Avslappnad', 
       description: 'Informell och ledig',
-      icon: '😎',
+      icon: 'Casual',
       color: 'bg-purple-100 text-purple-800'
     },
     { 
       value: 'formal', 
       label: 'Formell', 
       description: 'Strikt och korrekt',
-      icon: '🎩',
+      icon: 'Formal',
       color: 'bg-gray-100 text-gray-800'
     },
   ];
@@ -304,7 +304,7 @@ export function BotConfig() {
                         }
                       `}>
                         <div className="flex items-center space-x-3">
-                          <span className="text-2xl">{option.icon}</span>
+                          <span className="text-sm font-medium px-2 py-1 rounded bg-gray-100">{option.icon}</span>
                           <div>
                             <div className="font-semibold text-gray-900">{option.label}</div>
                             <div className="text-sm text-gray-600">{option.description}</div>
@@ -406,7 +406,7 @@ export function BotConfig() {
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                   toneOptions.find(t => t.value === config.tone)?.color || 'bg-gray-100 text-gray-800'
                 }`}>
-                  {toneOptions.find(t => t.value === config.tone)?.icon} {toneOptions.find(t => t.value === config.tone)?.label}
+                  {toneOptions.find(t => t.value === config.tone)?.label}
                 </span>
               </div>
             </div>

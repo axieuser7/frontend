@@ -329,7 +329,7 @@ export function SupabaseConfigManager() {
 
         {/* Hjälpsektion */}
         <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <h4 className="font-semibold text-yellow-900 mb-2">💡 Tips för att komma igång</h4>
+          <h4 className="font-semibold text-yellow-900 mb-2">Tips för att komma igång</h4>
           <div className="space-y-2 text-yellow-800 text-sm">
             <p>1. Skapa tabeller i ditt Supabase-projekt för kunskapsbas och företagsinformation</p>
             <p>2. Ladda upp dina dokument och skapa embeddings</p>
