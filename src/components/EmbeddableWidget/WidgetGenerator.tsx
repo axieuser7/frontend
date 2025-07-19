@@ -1,20 +1,53 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { Copy, Code, Eye, Download, ExternalLink } from 'lucide-react';
 import { BotConfig } from '../../types';
 
 interface WidgetGeneratorProps {
-  botConfig: BotConfig;
-  apiKey: string;
-  provider: 'openai' | 'claude' | 'groq';
   userId: string;
 }
 
-export function WidgetGenerator({ botConfig, apiKey, provider, userId }: WidgetGeneratorProps) {
+export function WidgetGenerator({ userId }: WidgetGeneratorProps) {
+  const { user } = useAuth();
+  const [botConfig, setBotConfig] = useState<BotConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [position, setPosition] = useState<'bottom-right' | 'bottom-left'>('bottom-right');
   const [showPreview, setShowPreview] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Load user's bot config
+  React.useEffect(() => {
+    if (user) {
+      loadBotConfig();
+    }
+  }, [user]);
+
+  const loadBotConfig = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('bot_configs')
+        .select('*')
+        .eq('user_id', user!.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      setBotConfig(data);
+    } catch (err) {
+      console.error('Error loading bot config:', err);
+      setError('Kunde inte ladda bot-konfiguration');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const generateEmbedCode = () => {
+    if (!botConfig) return '';
+    
     const config = {
       widgetId: botConfig.id,
       baseUrl: window.location.origin,
@@ -38,6 +71,8 @@ export function WidgetGenerator({ botConfig, apiKey, provider, userId }: WidgetG
   };
 
   const generateReactCode = () => {
+    if (!botConfig) return '';
+    
     return `import { ChatWidget } from '@din-organisation/chatbot-widget';
 
 function App() {
@@ -63,6 +98,44 @@ function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/3 mb-6"></div>
+            <div className="space-y-4">
+              <div className="h-16 bg-gray-200 rounded"></div>
+              <div className="h-32 bg-gray-200 rounded"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!botConfig) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="text-center py-12">
+            <Code className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Ingen bot-konfiguration</h3>
+            <p className="text-gray-500 mb-4">
+              Du måste först konfigurera din chatbot innan du kan generera inbäddningskod.
+            </p>
+            <button
+              onClick={() => window.location.hash = '#config'}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            >
+              Konfigurera din bot
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -70,6 +143,12 @@ function App() {
           <Code className="w-6 h-6 mr-3 text-blue-600" />
           Widget-generator
         </h2>
+
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-700 text-sm">{error}</p>
+          </div>
+        )}
 
         {/* Konfiguration */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">

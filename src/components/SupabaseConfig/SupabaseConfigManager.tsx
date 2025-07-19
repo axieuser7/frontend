@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { Plus, Database, Eye, EyeOff, Trash2, ExternalLink } from 'lucide-react';
 import { SupabaseConfig } from '../../types';
 
 export function SupabaseConfigManager() {
+  const { user } = useAuth();
   const [configs, setConfigs] = useState<SupabaseConfig[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [newConfig, setNewConfig] = useState({
     project_name: '',
     project_url: '',
@@ -13,33 +18,81 @@ export function SupabaseConfigManager() {
   });
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
 
-  const handleAddConfig = () => {
+  // Load user's Supabase configs on component mount
+  React.useEffect(() => {
+    if (user) {
+      loadConfigs();
+    }
+  }, [user]);
+
+  const loadConfigs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('supabase_configs')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setConfigs(data || []);
+    } catch (err) {
+      console.error('Error loading Supabase configs:', err);
+      setError('Kunde inte ladda Supabase-konfigurationer');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddConfig = async () => {
     if (!newConfig.project_name.trim() || !newConfig.project_url.trim() || !newConfig.anon_key.trim()) {
       return;
     }
+    if (!user) return;
 
-    const config: SupabaseConfig = {
-      id: Date.now().toString(),
-      user_id: 'current-user', // Skulle komma från auth
-      project_name: newConfig.project_name,
-      project_url: newConfig.project_url,
-      anon_key: newConfig.anon_key,
-      service_role_key: newConfig.service_role_key || undefined,
-      created_at: new Date().toISOString(),
-    };
+    try {
+      const { data, error } = await supabase
+        .from('supabase_configs')
+        .insert([{
+          user_id: user.id,
+          project_name: newConfig.project_name,
+          project_url: newConfig.project_url,
+          anon_key: newConfig.anon_key,
+          service_role_key: newConfig.service_role_key || null,
+        }])
+        .select()
+        .single();
 
-    setConfigs(prev => [...prev, config]);
-    setNewConfig({ project_name: '', project_url: '', anon_key: '', service_role_key: '' });
-    setShowAddForm(false);
+      if (error) throw error;
+
+      setConfigs(prev => [data, ...prev]);
+      setNewConfig({ project_name: '', project_url: '', anon_key: '', service_role_key: '' });
+      setShowAddForm(false);
+    } catch (err) {
+      console.error('Error adding Supabase config:', err);
+      setError('Kunde inte spara Supabase-konfiguration');
+    }
   };
 
-  const handleDeleteConfig = (id: string) => {
-    setConfigs(prev => prev.filter(config => config.id !== id));
-    setVisibleKeys(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(id);
-      return newSet;
-    });
+  const handleDeleteConfig = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('supabase_configs')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user!.id);
+
+      if (error) throw error;
+
+      setConfigs(prev => prev.filter(config => config.id !== id));
+      setVisibleKeys(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
+    } catch (err) {
+      console.error('Error deleting Supabase config:', err);
+      setError('Kunde inte ta bort Supabase-konfiguration');
+    }
   };
 
   const toggleKeyVisibility = (id: string) => {
@@ -59,6 +112,22 @@ export function SupabaseConfigManager() {
     return key.substring(0, 8) + '••••••••' + key.substring(key.length - 8);
   };
 
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/3 mb-6"></div>
+            <div className="space-y-4">
+              <div className="h-16 bg-gray-200 rounded"></div>
+              <div className="h-16 bg-gray-200 rounded"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -75,6 +144,12 @@ export function SupabaseConfigManager() {
             Lägg till projekt
           </button>
         </div>
+
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-700 text-sm">{error}</p>
+          </div>
+        )}
 
         {/* Info-box */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">

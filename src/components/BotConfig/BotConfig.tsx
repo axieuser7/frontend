@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { Save, Palette, MessageCircle, User } from 'lucide-react';
 import { BotConfig as BotConfigType } from '../../types';
 
 export function BotConfig() {
+  const { user } = useAuth();
   const [config, setConfig] = useState<Partial<BotConfigType>>({
     name: 'AI Assistant',
     system_prompt: 'Du är en hjälpsam AI-assistent som svarar på svenska och hjälper användare med deras frågor.',
@@ -13,12 +16,78 @@ export function BotConfig() {
   });
 
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // Load user's bot config on component mount
+  React.useEffect(() => {
+    if (user) {
+      loadBotConfig();
+    }
+  }, [user]);
+
+  const loadBotConfig = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('bot_configs')
+        .select('*')
+        .eq('user_id', user!.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw error;
+      }
+
+      if (data) {
+        setConfig(data);
+      }
+    } catch (err) {
+      console.error('Error loading bot config:', err);
+      setError('Kunde inte ladda bot-konfiguration');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSave = async () => {
+    if (!user) return;
+    
     setSaving(true);
-    // Här skulle du spara konfigurationen till Supabase
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulera API-anrop
-    setSaving(false);
+    setError('');
+
+    try {
+      const configData = {
+        ...config,
+        user_id: user.id,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (config.id) {
+        // Update existing config
+        const { error } = await supabase
+          .from('bot_configs')
+          .update(configData)
+          .eq('id', config.id)
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+      } else {
+        // Create new config
+        const { data, error } = await supabase
+          .from('bot_configs')
+          .insert([configData])
+          .select()
+          .single();
+
+        if (error) throw error;
+        setConfig(data);
+      }
+    } catch (err) {
+      console.error('Error saving bot config:', err);
+      setError('Kunde inte spara konfigurationen');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toneOptions = [
@@ -28,6 +97,24 @@ export function BotConfig() {
     { value: 'formal', label: 'Formell', description: 'Strikt och korrekt' },
   ];
 
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/3 mb-6"></div>
+            <div className="space-y-4">
+              <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+              <div className="h-12 bg-gray-200 rounded"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+              <div className="h-24 bg-gray-200 rounded"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -35,6 +122,12 @@ export function BotConfig() {
           <User className="w-6 h-6 mr-3 text-blue-600" />
           Chatbot-konfiguration
         </h2>
+
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-700 text-sm">{error}</p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Grundinställningar */}

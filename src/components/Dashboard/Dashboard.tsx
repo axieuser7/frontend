@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-// import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { BotConfig } from '../BotConfig/BotConfig';
 import { ChatInterface } from '../Chat/ChatInterface';
 import { ApiKeyManager } from '../ApiKeys/ApiKeyManager';
@@ -17,26 +17,15 @@ import {
 } from 'lucide-react';
 
 export function Dashboard() {
-  // Tillfällig demo-användare
-  const user = { email: 'demo@example.com' };
-  const signOut = () => console.log('Logga ut');
+  const { user, signOut } = useAuth();
   
   const [activeTab, setActiveTab] = useState<'chat' | 'config' | 'api-keys' | 'supabase' | 'widget'>('chat');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Demo-data för widget
-  const demoBotConfig = {
-    id: '1',
-    user_id: 'demo',
-    name: 'AI Assistant',
-    system_prompt: 'Du är en hjälpsam AI-assistent som svarar på svenska och hjälper användare med deras frågor.',
-    tone: 'friendly' as const,
-    primary_color: '#2563EB',
-    first_message: 'Välkommen! Jag är här för att hjälpa dig.',
-    welcome_message: 'Hej! Hur kan jag hjälpa dig idag?',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
+  if (!user) {
+    return null; // This shouldn't happen due to ProtectedRoute, but just in case
+  }
+
   const navigation = [
     { id: 'chat', name: 'Chatbot', icon: Bot },
     { id: 'config', name: 'Konfiguration', icon: Settings },
@@ -137,12 +126,7 @@ export function Dashboard() {
           {activeTab === 'config' && <BotConfig />}
           {activeTab === 'api-keys' && <ApiKeyManager />}
           {activeTab === 'supabase' && <SupabaseConfigManager />}
-          {activeTab === 'widget' && (
-            <WidgetGenerator 
-              botConfig={demoBotConfig}
-              userId="demo-user"
-            />
-          )}
+          {activeTab === 'widget' && <WidgetGenerator userId={user.id} />}
         </main>
       </div>
 

@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { Plus, Eye, EyeOff, Trash2, Key } from 'lucide-react';
 import { ApiKey } from '../../types';
 
 export function ApiKeyManager() {
+  const { user } = useAuth();
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [newKey, setNewKey] = useState({
     provider: 'openai' as const,
     key: '',
@@ -17,30 +22,79 @@ export function ApiKeyManager() {
     { value: 'groq', label: 'Groq', description: 'Snabba LLM-modeller' },
   ] as const;
 
-  const handleAddKey = () => {
-    if (!newKey.key.trim()) return;
+  // Load user's API keys on component mount
+  React.useEffect(() => {
+    if (user) {
+      loadApiKeys();
+    }
+  }, [user]);
 
-    const apiKey: ApiKey = {
-      id: Date.now().toString(),
-      user_id: 'current-user', // Skulle komma från auth
-      provider: newKey.provider,
-      key: newKey.key,
-      is_active: true,
-      created_at: new Date().toISOString(),
-    };
+  const loadApiKeys = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('api_keys')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false });
 
-    setApiKeys(prev => [...prev, apiKey]);
-    setNewKey({ provider: 'openai', key: '' });
-    setShowAddForm(false);
+      if (error) throw error;
+      setApiKeys(data || []);
+    } catch (err) {
+      console.error('Error loading API keys:', err);
+      setError('Kunde inte ladda API-nycklar');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeleteKey = (id: string) => {
-    setApiKeys(prev => prev.filter(key => key.id !== id));
-    setVisibleKeys(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(id);
-      return newSet;
-    });
+  const handleAddKey = async () => {
+    if (!newKey.key.trim()) return;
+    if (!user) return;
+
+    try {
+      // In production, you should encrypt the API key before storing
+      const { data, error } = await supabase
+        .from('api_keys')
+        .insert([{
+          user_id: user.id,
+          provider: newKey.provider,
+          key_encrypted: newKey.key, // In production, encrypt this
+          is_active: true,
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setApiKeys(prev => [data, ...prev]);
+      setNewKey({ provider: 'openai', key: '' });
+      setShowAddForm(false);
+    } catch (err) {
+      console.error('Error adding API key:', err);
+      setError('Kunde inte spara API-nyckel');
+    }
+  };
+
+  const handleDeleteKey = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('api_keys')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user!.id);
+
+      if (error) throw error;
+
+      setApiKeys(prev => prev.filter(key => key.id !== id));
+      setVisibleKeys(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
+    } catch (err) {
+      console.error('Error deleting API key:', err);
+      setError('Kunde inte ta bort API-nyckel');
+    }
   };
 
   const toggleKeyVisibility = (id: string) => {
@@ -60,6 +114,22 @@ export function ApiKeyManager() {
     return key.substring(0, 4) + '••••••••' + key.substring(key.length - 4);
   };
 
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/3 mb-6"></div>
+            <div className="space-y-4">
+              <div className="h-16 bg-gray-200 rounded"></div>
+              <div className="h-16 bg-gray-200 rounded"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -76,6 +146,12 @@ export function ApiKeyManager() {
             Lägg till nyckel
           </button>
         </div>
+
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-700 text-sm">{error}</p>
+          </div>
+        )}
 
         {/* Info-box */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -171,7 +247,7 @@ export function ApiKeyManager() {
                       </span>
                     </div>
                     <div className="font-mono text-sm text-gray-600">
-                      {isVisible ? apiKey.key : maskApiKey(apiKey.key)}
+                      {isVisible ? apiKey.key_encrypted : maskApiKey(apiKey.key_encrypted)}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
                       Tillagd: {new Date(apiKey.created_at).toLocaleDateString('sv-SE')}

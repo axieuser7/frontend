@@ -24,7 +24,7 @@ export interface ApiKey {
   id: string;
   user_id: string;
   provider: 'openai' | 'claude' | 'groq';
-  key: string;
+  key_encrypted: string;
   is_active: boolean;
   created_at: string;
 }
