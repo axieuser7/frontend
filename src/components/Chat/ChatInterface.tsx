@@ -3,6 +3,7 @@ import { Send, Bot, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { RAGService } from '../../lib/ragService';
+import { BotConfig } from '../../types';
 
 interface Message {
   id: string;
@@ -13,7 +14,7 @@ interface Message {
 
 interface ChatInterfaceProps {
   widgetId?: string;
-  botConfig?: any;
+  botConfig?: BotConfig;
 }
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfig }) => {
@@ -21,31 +22,51 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [config, setConfig] = useState(botConfig);
+  const [ragService] = useState(new RAGService());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (widgetId && !botConfig) {
-      fetchBotConfig();
+    if (user && !config) {
+      loadBotConfig();
     }
-  }, [widgetId, botConfig]);
+  }, [user, config]);
+
+  useEffect(() => {
+    if (config && config.welcome_message) {
+      const welcomeMessage: Message = {
+        id: 'welcome',
+        content: config.welcome_message,
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages([welcomeMessage]);
+    }
+  }, [config]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  const fetchBotConfig = async () => {
+  const loadBotConfig = async () => {
     try {
       const { data, error } = await supabase
         .from('bot_configs')
-        .select('*')
-        .eq('widget_id', widgetId)
+        .select('*') 
+        .eq('user_id', user!.id)
         .single();
 
-      if (error) throw error;
-      setConfig(data);
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
+      if (data) {
+        setConfig(data);
+      }
     } catch (error) {
       console.error('Error fetching bot config:', error);
+      setError('Kunde inte ladda bot-konfiguration');
     }
   };
 
@@ -55,6 +76,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
+    
+    setError('');
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -68,20 +91,31 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
     setIsLoading(true);
 
     try {
-      let response = '';
-      
-      if (config?.use_rag && config?.vector_store_id) {
-        // Use RAG service for enhanced responses
-        const ragService = new RAGService();
-        response = await ragService.generateResponse(
-          inputValue,
-          config.vector_store_id,
-          config.openai_api_key
-        );
-      } else {
-        // Simple response without RAG
-        response = await generateSimpleResponse(inputValue);
+      if (!config) {
+        throw new Error('Bot-konfiguration saknas');
       }
+
+      // Get user's API key
+      const { data: apiKey, error: apiError } = await supabase
+        .from('api_keys')
+        .select('provider, key_encrypted')
+        .eq('user_id', user!.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .single();
+
+      if (apiError || !apiKey) {
+        throw new Error('Ingen aktiv API-nyckel hittades. Lägg till en API-nyckel först.');
+      }
+      
+      // Use RAG service for enhanced responses
+      const response = await ragService.enhancedContextualResponse(
+        inputValue,
+        config,
+        user!.id,
+        apiKey.key_encrypted,
+        apiKey.provider as 'openai' | 'claude' | 'groq'
+      );
 
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -93,9 +127,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
       setMessages(prev => [...prev, botMessage]);
     } catch (error) {
       console.error('Error generating response:', error);
+      setError(error instanceof Error ? error.message : 'Ett fel inträffade');
+      
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: 'Ursäkta, jag stötte på ett fel. Försök igen senare.',
         isUser: false,
         timestamp: new Date(),
       };
@@ -103,18 +139,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const generateSimpleResponse = async (message: string): Promise<string> => {
-    // Simple fallback response logic
-    const responses = [
-      "Thank you for your message. How can I help you today?",
-      "I understand. Could you provide more details?",
-      "That's interesting. What would you like to know more about?",
-      "I'm here to help. What specific information are you looking for?",
-    ];
-    
-    return responses[Math.floor(Math.random() * responses.length)];
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -126,20 +150,36 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-lg">
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4 m-4 rounded">
+          <div className="flex">
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="flex items-center p-4 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-t-lg">
         <Bot className="w-6 h-6 mr-2" />
         <h3 className="font-semibold">
-          {config?.bot_name || 'AI Assistant'}
+          {config?.name || 'AI Assistant'}
         </h3>
+        <div className="ml-auto">
+          <span className="text-xs bg-white/20 px-2 py-1 rounded">
+            {isLoading ? 'Skriver...' : 'Online'}
+          </span>
+        </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 max-h-96">
         {messages.length === 0 && (
           <div className="text-center text-gray-500 py-8">
             <Bot className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-            <p>Start a conversation with the AI assistant!</p>
+            <p>Starta en konversation med AI-assistenten!</p>
           </div>
         )}
         
@@ -151,9 +191,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
             <div
               className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                 message.isUser
-                  ? 'bg-blue-500 text-white'
+                  ? 'text-white'
                   : 'bg-gray-100 text-gray-800'
               }`}
+              style={message.isUser ? { backgroundColor: config?.primary_color || '#3B82F6' } : {}}
             >
               <div className="flex items-start space-x-2">
                 {!message.isUser && (
@@ -162,9 +203,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
                 <div className="flex-1">
                   <p className="text-sm">{message.content}</p>
                   <p className={`text-xs mt-1 ${
-                    message.isUser ? 'text-blue-100' : 'text-gray-500'
+                    message.isUser ? 'text-white opacity-75' : 'text-gray-500'
                   }`}>
-                    {message.timestamp.toLocaleTimeString()}
+                    {message.timestamp.toLocaleTimeString('sv-SE', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
                   </p>
                 </div>
                 {message.isUser && (
@@ -200,7 +244,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Type your message..."
+            placeholder="Skriv ditt meddelande..."
             className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             rows={1}
             disabled={isLoading}
@@ -208,7 +252,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
           <button
             onClick={handleSendMessage}
             disabled={!inputValue.trim() || isLoading}
-            className="bg-blue-500 text-white p-2 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="text-white p-2 rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            style={{ backgroundColor: config?.primary_color || '#3B82F6' }}
           >
             <Send className="w-5 h-5" />
           </button>

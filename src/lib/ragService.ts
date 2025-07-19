@@ -1,12 +1,14 @@
 import { supabase } from './supabase';
 import { VectorService } from './vectorService';
 import { SupabaseConfig, KnowledgeBase, BotConfig } from '../types';
+import OpenAI from 'openai';
 
 export class RAGService {
   private userSupabaseClient: any = null;
   private userConfig: SupabaseConfig | null = null;
   private cache: Map<string, any> = new Map();
   private vectorService: VectorService = new VectorService();
+  private openai: OpenAI | null = null;
 
   async initializeUserSupabase(userId: string) {
     // Check cache first
@@ -65,6 +67,10 @@ export class RAGService {
 
       if (apiKey) {
         this.vectorService.setOpenAIKey(apiKey.key_encrypted);
+        this.openai = new OpenAI({
+          apiKey: apiKey.key_encrypted,
+          dangerouslyAllowBrowser: true
+        });
         
         // Use vector search
         const results = await this.vectorService.searchSimilarDocuments(query, limit, 0.7);
@@ -329,32 +335,24 @@ SVARSSTIL: Ge konkreta, användbara svar som hjälper användaren att nå sina m
   }
 
   private async callOpenAI(userMessage: string, systemPrompt: string, apiKey: string): Promise<string> {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage }
-        ],
-        max_tokens: 800,
-        temperature: 0.8,
-        presence_penalty: 0.1,
-        frequency_penalty: 0.1,
-      }),
+    const openai = new OpenAI({
+      apiKey: apiKey,
+      dangerouslyAllowBrowser: true
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`OpenAI API fel: ${response.statusText} - ${errorData.error?.message || 'Unknown error'}`);
-    }
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage }
+      ],
+      max_tokens: 800,
+      temperature: 0.8,
+      presence_penalty: 0.1,
+      frequency_penalty: 0.1,
+    });
 
-    const data = await response.json();
-    return data.choices[0]?.message?.content || 'Kunde inte generera svar.';
+    return response.choices[0]?.message?.content || 'Kunde inte generera svar.';
   }
 
   private async callClaude(userMessage: string, systemPrompt: string, apiKey: string): Promise<string> {
