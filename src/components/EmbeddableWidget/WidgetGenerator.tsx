@@ -48,9 +48,10 @@ export function WidgetGenerator({ userId }: WidgetGeneratorProps) {
   const generateEmbedCode = () => {
     if (!botConfig) return '';
     
+    const baseUrl = 'https://frontenddk.netlify.app';
     const config = {
       widgetId: botConfig.id,
-      baseUrl: window.location.origin,
+      baseUrl: baseUrl,
       position: position,
       sessionId: null, // Optional: for chat history
     };
@@ -60,7 +61,7 @@ export function WidgetGenerator({ userId }: WidgetGeneratorProps) {
 <script>
   window.ChatbotConfig = ${JSON.stringify(config, null, 2)};
 </script>
-<script src="${window.location.origin}/chatbot-widget.js"></script>
+<script src="${baseUrl}/chatbot-widget.js"></script>
 
 <!-- För anpassad styling (valfritt) -->
 <style>
@@ -83,7 +84,7 @@ function App() {
       
       <ChatWidget
         widgetId="${botConfig.id}"
-        baseUrl="${window.location.origin}"
+        baseUrl="${baseUrl}"
         position="${position}"
         sessionId={null} // Optional: för chat-historik
       />

@@ -58,7 +58,7 @@ export async function GET(request: Request, { params }: { params: { widgetId: st
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': 'https://frontenddk.netlify.app',
         'Access-Control-Allow-Methods': 'GET',
         'Access-Control-Allow-Headers': 'Content-Type',
       },
