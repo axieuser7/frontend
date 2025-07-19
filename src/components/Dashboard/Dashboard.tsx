@@ -5,6 +5,7 @@ import { ChatInterface } from '../Chat/ChatInterface';
 import { ApiKeyManager } from '../ApiKeys/ApiKeyManager';
 import { SupabaseConfigManager } from '../SupabaseConfig/SupabaseConfigManager';
 import { WidgetGenerator } from '../EmbeddableWidget/WidgetGenerator';
+import { VectorStoreManager } from '../VectorStore/VectorStoreManager';
 import { 
   Bot, 
   Settings, 
@@ -18,13 +19,14 @@ import {
   Sparkles,
   Bell,
   Search,
-  HelpCircle
+  HelpCircle,
+  Brain
 } from 'lucide-react';
 
 export function Dashboard() {
   const { user, signOut } = useAuth();
   
-  const [activeTab, setActiveTab] = useState<'overview' | 'chat' | 'config' | 'api-keys' | 'supabase' | 'widget'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'chat' | 'config' | 'api-keys' | 'supabase' | 'vector-store' | 'widget'>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!user) {
@@ -37,6 +39,7 @@ export function Dashboard() {
     { id: 'config', name: 'Konfiguration', icon: Settings, description: 'Anpassa din bot' },
     { id: 'api-keys', name: 'AI-Nycklar', icon: Key, description: 'Hantera API-nycklar' },
     { id: 'supabase', name: 'Kunskapsbas', icon: Database, description: 'Databasanslutning' },
+    { id: 'vector-store', name: 'Vector Store', icon: Brain, description: 'AI-powered kunskapsbas' },
     { id: 'widget', name: 'Inbäddning', icon: Code, description: 'Generera widget-kod' },
   ] as const;
 
@@ -289,6 +292,7 @@ export function Dashboard() {
           {activeTab === 'config' && <BotConfig />}
           {activeTab === 'api-keys' && <ApiKeyManager />}
           {activeTab === 'supabase' && <SupabaseConfigManager />}
+          {activeTab === 'vector-store' && <VectorStoreManager />}
           {activeTab === 'widget' && <WidgetGenerator userId={user.id} />}
         </main>
       </div>

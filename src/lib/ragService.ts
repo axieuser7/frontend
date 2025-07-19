@@ -1,10 +1,12 @@
 import { supabase } from './supabase';
+import { VectorService } from './vectorService';
 import { SupabaseConfig, KnowledgeBase, BotConfig } from '../types';
 
 export class RAGService {
   private userSupabaseClient: any = null;
   private userConfig: SupabaseConfig | null = null;
   private cache: Map<string, any> = new Map();
+  private vectorService: VectorService = new VectorService();
 
   async initializeUserSupabase(userId: string) {
     // Check cache first
@@ -36,8 +38,67 @@ export class RAGService {
     return this.userSupabaseClient;
   }
 
+  async searchKnowledgeBaseVector(query: string, userId: string, limit: number = 5): Promise<any[]> {
+    try {
+      // Get user's Supabase config
+      const { data: config } = await supabase
+        .from('supabase_configs')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (!config) {
+        return [];
+      }
+
+      // Initialize vector service
+      await this.vectorService.initializeUserSupabase(config.project_url, config.anon_key);
+      
+      // Get user's OpenAI API key
+      const { data: apiKey } = await supabase
+        .from('api_keys')
+        .select('key_encrypted')
+        .eq('user_id', userId)
+        .eq('provider', 'openai')
+        .eq('is_active', true)
+        .single();
+
+      if (apiKey) {
+        this.vectorService.setOpenAIKey(apiKey.key_encrypted);
+        
+        // Use vector search
+        const results = await this.vectorService.searchSimilarDocuments(query, limit, 0.7);
+        return results.map(result => ({
+          content: result.content,
+          source: result.source,
+          metadata: result.metadata,
+          similarity: result.similarity
+        }));
+      }
+
+      return [];
+    } catch (error) {
+      console.error('Vector search failed:', error);
+      return [];
+    }
+  }
+
   async searchKnowledgeBase(query: string, userId: string, limit: number = 5): Promise<KnowledgeBase[]> {
     try {
+      // Try vector search first
+      const vectorResults = await this.searchKnowledgeBaseVector(query, userId, limit);
+      if (vectorResults.length > 0) {
+        return vectorResults.map(result => ({
+          id: Math.random().toString(),
+          user_id: userId,
+          content: result.content,
+          source: result.source,
+          metadata: result.metadata,
+          created_at: new Date().toISOString()
+        }));
+      }
+
+      // Fallback to traditional search
       if (!this.userSupabaseClient) {
         await this.initializeUserSupabase(userId);
       }
@@ -153,12 +214,13 @@ export class RAGService {
       context += `FÖRETAGSINFORMATION:\n${companyInfo}\n\n`;
     }
 
-    // 2. Knowledge base search
-    const relevantDocs = await this.searchKnowledgeBase(userMessage, userId, 3);
+    // 2. Knowledge base search (now with vector support)
+    const relevantDocs = await this.searchKnowledgeBase(userMessage, userId, 5);
     if (relevantDocs.length > 0) {
       context += 'RELEVANT KUNSKAPSBAS:\n';
       relevantDocs.forEach((doc, index) => {
-        context += `${index + 1}. ${doc.content}\n`;
+        const similarity = (doc as any).similarity ? ` (${Math.round((doc as any).similarity * 100)}% relevans)` : '';
+        context += `${index + 1}. ${doc.content}${similarity}\n`;
       });
       context += '\n';
     }
