@@ -18,6 +18,7 @@ export function BotConfig() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [showPreview, setShowPreview] = useState(false);
 
   React.useEffect(() => {
@@ -54,6 +55,7 @@ export function BotConfig() {
     
     setSaving(true);
     setError('');
+    setSuccess('');
 
     try {
       const configData = {
@@ -80,6 +82,9 @@ export function BotConfig() {
         if (error) throw error;
         setConfig(data);
       }
+      
+      setSuccess('Konfiguration sparad framgångsrikt!');
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Error saving bot config:', err);
       setError('Kunde inte spara konfigurationen');
@@ -174,6 +179,12 @@ export function BotConfig() {
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4">
           <p className="text-red-700 text-sm">{error}</p>
+        </div>
+      )}
+        
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <p className="text-green-700 text-sm">{success}</p>
         </div>
       )}
 

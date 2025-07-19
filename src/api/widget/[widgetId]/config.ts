@@ -1,6 +1,5 @@
 // API endpoint to fetch widget configuration
 import { supabase } from '../../../lib/supabase';
-import { config } from '../../../lib/config';
 
 export async function GET(request: Request, { params }: { params: { widgetId: string } }) {
   try {
@@ -26,7 +25,12 @@ export async function GET(request: Request, { params }: { params: { widgetId: st
     if (botError || !botConfig) {
       return new Response(JSON.stringify({ error: 'Bot configuration not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
       });
     }
 
@@ -59,16 +63,22 @@ export async function GET(request: Request, { params }: { params: { widgetId: st
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': config.cors.allowedOrigins.join(', '),
-        'Access-Control-Allow-Methods': 'GET',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     });
   } catch (error) {
     console.error('Error fetching widget config:', error);
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
     });
   }
 }
@@ -80,6 +90,7 @@ export async function OPTIONS() {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
     },
   });
 }

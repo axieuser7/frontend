@@ -1,7 +1,6 @@
 // API endpoint for widget chat functionality
 import { supabase } from '../../../lib/supabase';
 import { RAGService } from '../../../lib/ragService';
-import { config } from '../../../lib/config';
 
 export async function POST(request: Request, { params }: { params: { widgetId: string } }) {
   try {
@@ -19,9 +18,17 @@ export async function POST(request: Request, { params }: { params: { widgetId: s
       .single();
 
     if (botError || !botConfig) {
-      return new Response(JSON.stringify({ error: 'Bot configuration not found' }), {
+      return new Response(JSON.stringify({ 
+        error: 'Bot configuration not found',
+        response: 'Ursäkta, jag kunde inte hitta bot-konfigurationen. Kontakta support.'
+      }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
       });
     }
 
@@ -35,9 +42,17 @@ export async function POST(request: Request, { params }: { params: { widgetId: s
       .single();
 
     if (apiError || !apiKey) {
-      return new Response(JSON.stringify({ error: 'No active API key found' }), {
+      return new Response(JSON.stringify({ 
+        error: 'No active API key found',
+        response: 'Ursäkta, ingen aktiv AI-tjänst är konfigurerad för denna chatbot. Kontakta administratören.'
+      }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
       });
     }
 

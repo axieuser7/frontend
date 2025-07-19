@@ -321,7 +321,7 @@ ${tone === 'friendly' ? 'Är det något annat jag kan hjälpa dig med?' : 'Hur k
             
             {/* Typing Indicator */}
             {isTyping && (
-              <div className="flex justify-start animate-fade-in">
+            {connectionStatus === 'connected' ? (
                 <div className="flex">
                   <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mr-3 shadow-md">
                     <Bot className="w-5 h-5 text-white" />
