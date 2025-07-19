@@ -66,7 +66,12 @@
 
     async fetchBotConfig() {
       try {
-        const response = await fetch(`${this.baseUrl}/api/widget/${this.widgetId}/config`);
+        const response = await fetch(`${this.baseUrl}/api/widget/${this.widgetId}/config`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         return await response.json();
       } catch (error) {
@@ -84,7 +89,7 @@
         });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
-        return data.response || data;
+        return data.response || data.message || 'Ursäkta, jag kunde inte generera ett svar.';
       } catch (error) {
         console.error('Failed to send message:', error);
         throw error;
