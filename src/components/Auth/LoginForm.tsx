@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
+import { LogIn, Mail, Lock, AlertCircle, Info } from 'lucide-react';
 
 export function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
 
     try {
@@ -21,7 +23,21 @@ export function LoginForm() {
         : await signIn(email, password);
 
       if (error) {
-        setError(error.message);
+        // Handle specific error cases
+        if (error.message.includes('email_not_confirmed')) {
+          setError('E-postadressen är inte bekräftad. Kontrollera din inkorg eller kontakta support.');
+        } else if (error.message.includes('over_email_send_rate_limit')) {
+          setError('För många försök. Vänta en minut innan du försöker igen.');
+        } else if (error.message.includes('Invalid login credentials')) {
+          setError('Felaktiga inloggningsuppgifter. Kontrollera e-post och lösenord.');
+        } else if (error.message.includes('User already registered')) {
+          setError('En användare med denna e-postadress finns redan. Försök logga in istället.');
+        } else {
+          setError(error.message);
+        }
+      } else if (isSignUp) {
+        setSuccess('Konto skapat! Du kan nu logga in.');
+        setIsSignUp(false);
       }
     } catch (err) {
       setError('Ett oväntat fel inträffade');
@@ -48,6 +64,13 @@ export function LoginForm() {
           </p>
         </div>
 
+        {success && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-center">
+            <Info className="w-5 h-5 text-green-500 mr-3" />
+            <span className="text-green-700 text-sm">{success}</span>
+          </div>
+        )}
+
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-center">
             <AlertCircle className="w-5 h-5 text-red-500 mr-3" />
@@ -55,6 +78,16 @@ export function LoginForm() {
           </div>
         )}
 
+        {/* Development Notice */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+          <div className="flex items-start">
+            <Info className="w-5 h-5 text-yellow-500 mr-3 mt-0.5" />
+            <div className="text-yellow-800 text-sm">
+              <p className="font-medium mb-1">Utvecklingsläge</p>
+              <p>E-postbekräftelse är inaktiverad. Du kan logga in direkt efter registrering.</p>
+            </div>
+          </div>
+        </div>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
@@ -91,6 +124,11 @@ export function LoginForm() {
                 minLength={6}
               />
             </div>
+            {isSignUp && (
+              <p className="text-xs text-gray-500 mt-1">
+                Minst 6 tecken
+              </p>
+            )}
           </div>
 
           <button
