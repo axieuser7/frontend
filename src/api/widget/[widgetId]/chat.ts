@@ -1,6 +1,7 @@
 // API endpoint for widget chat functionality
 import { supabase } from '../../../lib/supabase';
 import { RAGService } from '../../../lib/ragService';
+import { config } from '../../../lib/config';
 
 export async function POST(request: Request, { params }: { params: { widgetId: string } }) {
   try {
@@ -71,7 +72,7 @@ export async function POST(request: Request, { params }: { params: { widgetId: s
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': 'https://frontenddk.netlify.app',
+        'Access-Control-Allow-Origin': config.cors.allowedOrigins.join(', '),
         'Access-Control-Allow-Methods': 'POST',
         'Access-Control-Allow-Headers': 'Content-Type',
       },

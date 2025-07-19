@@ -42,7 +42,7 @@
   function ChatWidget(props) {
     const {
       widgetId,
-      baseUrl = window.location.origin,
+      baseUrl = 'https://frontenddk.netlify.app',
       position = 'bottom-right',
       sessionId = null
     } = props;
