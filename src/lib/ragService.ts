@@ -1,11 +1,19 @@
 import { supabase } from './supabase';
-import { SupabaseConfig, KnowledgeBase } from '../types';
+import { SupabaseConfig, KnowledgeBase, BotConfig } from '../types';
 
 export class RAGService {
   private userSupabaseClient: any = null;
   private userConfig: SupabaseConfig | null = null;
+  private cache: Map<string, any> = new Map();
 
   async initializeUserSupabase(userId: string) {
+    // Check cache first
+    const cacheKey = `supabase_${userId}`;
+    if (this.cache.has(cacheKey)) {
+      this.userConfig = this.cache.get(cacheKey);
+      return this.userSupabaseClient;
+    }
+
     // Hämta användarens Supabase-konfiguration
     const { data: config, error } = await supabase
       .from('supabase_configs')
@@ -14,10 +22,12 @@ export class RAGService {
       .single();
 
     if (error || !config) {
-      throw new Error('Ingen Supabase-konfiguration hittades för användaren');
+      console.warn('No Supabase configuration found for user, using fallback');
+      return null;
     }
 
     this.userConfig = config;
+    this.cache.set(cacheKey, config);
 
     // Skapa klient för användarens Supabase-projekt
     const { createClient } = await import('@supabase/supabase-js');
@@ -27,53 +37,185 @@ export class RAGService {
   }
 
   async searchKnowledgeBase(query: string, userId: string, limit: number = 5): Promise<KnowledgeBase[]> {
-    if (!this.userSupabaseClient) {
-      await this.initializeUserSupabase(userId);
-    }
-
     try {
-      // Använd Supabase's inbyggda similarity search om tillgängligt
-      const { data, error } = await this.userSupabaseClient
-        .from('knowledge_base')
-        .select('*')
-        .textSearch('content', query)
-        .limit(limit);
+      if (!this.userSupabaseClient) {
+        await this.initializeUserSupabase(userId);
+      }
 
-      if (error) {
-        console.error('Fel vid sökning i kunskapsbas:', error);
+      if (!this.userSupabaseClient) {
         return [];
       }
 
-      return data || [];
+      // Try multiple search strategies
+      const searchStrategies = [
+        // 1. Full-text search
+        () => this.userSupabaseClient
+          .from('knowledge_base')
+          .select('*')
+          .textSearch('content', query)
+          .limit(limit),
+        
+        // 2. ILIKE search for partial matches
+        () => this.userSupabaseClient
+          .from('knowledge_base')
+          .select('*')
+          .ilike('content', `%${query}%`)
+          .limit(limit),
+        
+        // 3. Keyword-based search
+        () => this.userSupabaseClient
+          .from('knowledge_base')
+          .select('*')
+          .or(query.split(' ').map(word => `content.ilike.%${word}%`).join(','))
+          .limit(limit)
+      ];
+
+      for (const strategy of searchStrategies) {
+        try {
+          const { data, error } = await strategy();
+          if (!error && data && data.length > 0) {
+            return data;
+          }
+        } catch (strategyError) {
+          console.warn('Search strategy failed:', strategyError);
+          continue;
+        }
+      }
+
+      return [];
     } catch (error) {
-      console.error('RAG-sökning misslyckades:', error);
+      console.error('RAG search failed:', error);
       return [];
     }
   }
 
   async getCompanyInformation(userId: string): Promise<string> {
-    if (!this.userSupabaseClient) {
-      await this.initializeUserSupabase(userId);
-    }
-
     try {
-      const { data, error } = await this.userSupabaseClient
-        .from('company_info')
-        .select('*')
+      // First try user's Supabase
+      if (!this.userSupabaseClient) {
+        await this.initializeUserSupabase(userId);
+      }
+
+      if (this.userSupabaseClient) {
+        const { data, error } = await this.userSupabaseClient
+          .from('company_info')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+
+        if (!error && data) {
+          return data.information || '';
+        }
+      }
+
+      // Fallback to main bot config
+      const { data: botConfig } = await supabase
+        .from('bot_configs')
+        .select('company_information')
         .eq('user_id', userId)
         .single();
 
-      if (error || !data) {
-        return '';
-      }
-
-      return data.information || '';
+      return botConfig?.company_information || '';
     } catch (error) {
-      console.error('Kunde inte hämta företagsinformation:', error);
+      console.error('Could not fetch company information:', error);
       return '';
     }
   }
 
+  async enhancedContextualResponse(
+    userMessage: string,
+    botConfig: BotConfig,
+    userId: string,
+    apiKey: string,
+    provider: 'openai' | 'claude' | 'groq'
+  ): Promise<string> {
+    try {
+      // Get conversation context
+      const context = await this.buildEnhancedContext(userMessage, userId, botConfig);
+      
+      // Create enhanced system prompt
+      const systemPrompt = this.buildEnhancedSystemPrompt(botConfig, context);
+      
+      // Call LLM with enhanced context
+      return await this.callLLM(userMessage, systemPrompt, apiKey, provider);
+    } catch (error) {
+      console.error('Enhanced contextual response failed:', error);
+      return this.getFallbackResponse(botConfig.tone);
+    }
+  }
+
+  private async buildEnhancedContext(userMessage: string, userId: string, botConfig: BotConfig): Promise<string> {
+    let context = '';
+
+    // 1. Company information
+    const companyInfo = await this.getCompanyInformation(userId);
+    if (companyInfo) {
+      context += `FÖRETAGSINFORMATION:\n${companyInfo}\n\n`;
+    }
+
+    // 2. Knowledge base search
+    const relevantDocs = await this.searchKnowledgeBase(userMessage, userId, 3);
+    if (relevantDocs.length > 0) {
+      context += 'RELEVANT KUNSKAPSBAS:\n';
+      relevantDocs.forEach((doc, index) => {
+        context += `${index + 1}. ${doc.content}\n`;
+      });
+      context += '\n';
+    }
+
+    // 3. Bot-specific context from config
+    if (botConfig.company_information) {
+      context += `YTTERLIGARE FÖRETAGSINFO:\n${botConfig.company_information}\n\n`;
+    }
+
+    return context;
+  }
+
+  private buildEnhancedSystemPrompt(botConfig: BotConfig, context: string): string {
+    const toneInstructions = this.getDetailedToneInstructions(botConfig.tone);
+    
+    return `Du är ${botConfig.name}, en professionell AI-assistent med följande egenskaper:
+
+HUVUDINSTRUKTION: ${botConfig.system_prompt}
+
+TONFALL OCH PERSONLIGHET: ${toneInstructions}
+
+${context ? `TILLGÄNGLIG KONTEXT:\n${context}` : ''}
+
+VIKTIGA RIKTLINJER:
+1. Svara ALLTID på svenska
+2. Använd den tillgängliga kontexten när det är relevant
+3. Om du inte vet svaret baserat på tillgänglig information, säg det ärligt
+4. Håll svaren hjälpsamma och i linje med det specificerade tonfallet
+5. Referera till företagsinformation när det är lämpligt
+6. Var konsekvent med din personlighet genom hela konversationen
+7. Om användaren frågar om något utanför din kunskap, erkänn begränsningarna
+8. Prioritera alltid användarens säkerhet och integritet
+
+SVARSSTIL: Ge konkreta, användbara svar som hjälper användaren att nå sina mål.`;
+  }
+
+  private getDetailedToneInstructions(tone: string): string {
+    const toneMap = {
+      friendly: 'Vänlig och tillmötesgående. Använd en varm, personlig ton med lämpliga uttryck som "Hej!", "Tack så mycket!" och "Jag hjälper gärna till!". Var entusiastisk men professionell.',
+      professional: 'Strikt professionell och saklig. Använd formellt språk, undvik slang, och håll en respektfull distans. Fokusera på fakta och lösningar.',
+      casual: 'Avslappnad och informell. Prata som en vän, använd vardagligt språk och var lättsam i tonen. Undvik för formella uttryck.',
+      formal: 'Mycket formell och korrekt. Använd traditionellt affärsspråk, fullständiga meningar och undvik förkortningar eller informella uttryck.'
+    };
+    return toneMap[tone as keyof typeof toneMap] || toneMap.friendly;
+  }
+
+  private getFallbackResponse(tone: string): string {
+    const responses = {
+      friendly: 'Hej! Tyvärr kunde jag inte behandla din förfrågan just nu, men jag hjälper gärna till på annat sätt. Kan du försöka igen eller ställa frågan på ett annat sätt?',
+      professional: 'Jag ber om ursäkt, men jag kunde inte behandla er förfrågan för tillfället. Vänligen försök igen eller kontakta support för ytterligare assistans.',
+      casual: 'Oj, något gick fel där! Kan du försöka igen? Jag är här för att hjälpa till.',
+      formal: 'Jag beklagar att jag för närvarande inte kan behandla er förfrågan. Vänligen försök igen eller kontakta vår support för assistans.'
+    };
+    return responses[tone as keyof typeof responses] || responses.friendly;
+  }
+
+  // Legacy method for backward compatibility
   async generateContextualResponse(
     userMessage: string,
     botConfig: any,
@@ -81,72 +223,29 @@ export class RAGService {
     apiKey: string,
     provider: 'openai' | 'claude' | 'groq'
   ): Promise<string> {
-    try {
-      // Sök i kunskapsbas
-      const relevantDocs = await this.searchKnowledgeBase(userMessage, userId);
-      
-      // Hämta företagsinformation
-      const companyInfo = await this.getCompanyInformation(userId);
-
-      // Bygg kontext
-      const context = this.buildContext(relevantDocs, companyInfo);
-
-      // Skapa system prompt
-      const systemPrompt = this.buildSystemPrompt(botConfig, context);
-
-      // Anropa LLM
-      return await this.callLLM(userMessage, systemPrompt, apiKey, provider);
-    } catch (error) {
-      console.error('Fel vid generering av kontextuellt svar:', error);
-      return 'Ursäkta, jag kunde inte behandla din förfrågan just nu. Försök igen senare.';
-    }
+    return this.enhancedContextualResponse(userMessage, botConfig, userId, apiKey, provider);
   }
 
   private buildContext(docs: KnowledgeBase[], companyInfo: string): string {
-    let context = '';
-
-    if (companyInfo) {
-      context += `FÖRETAGSINFORMATION:\n${companyInfo}\n\n`;
-    }
-
-    if (docs.length > 0) {
-      context += 'RELEVANT INFORMATION FRÅN KUNSKAPSBAS:\n';
-      docs.forEach((doc, index) => {
-        context += `${index + 1}. ${doc.content}\n`;
-      });
-      context += '\n';
-    }
-
-    return context;
+    return this.buildEnhancedContext('', '', { company_information: companyInfo } as BotConfig).then(context => {
+      if (docs.length > 0) {
+        let docContext = 'RELEVANT INFORMATION FRÅN KUNSKAPSBAS:\n';
+        docs.forEach((doc, index) => {
+          docContext += `${index + 1}. ${doc.content}\n`;
+        });
+        return context + docContext;
+      }
+      return context;
+    }).catch(() => companyInfo ? `FÖRETAGSINFORMATION:\n${companyInfo}\n\n` : '');
   }
 
   private buildSystemPrompt(botConfig: any, context: string): string {
-    let prompt = `Du är ${botConfig.name}, en AI-assistent med följande egenskaper:
+    if (typeof context === 'string') {
+      return this.buildEnhancedSystemPrompt(botConfig, context);
+    }
 
-SYSTEM PROMPT: ${botConfig.system_prompt}
-
-TONFALL: ${this.getToneDescription(botConfig.tone)}
-
-${context ? `KONTEXT ATT ANVÄNDA:\n${context}` : ''}
-
-INSTRUKTIONER:
-- Svara alltid på svenska
-- Använd den information som finns i kontexten ovan när det är relevant
-- Om du inte vet svaret baserat på den tillgängliga informationen, säg det ärligt
-- Håll svaren hjälpsamma och i linje med det specificerade tonfallet
-- Referera till företagsinformationen när det är lämpligt`;
-
-    return prompt;
-  }
-
-  private getToneDescription(tone: string): string {
-    const toneMap = {
-      friendly: 'Vänlig och tillmötesgående, använd en varm och personlig ton',
-      professional: 'Professionell och saklig, håll en formell men hjälpsam ton',
-      casual: 'Avslappnad och informell, prata som en vän',
-      formal: 'Strikt formell och korrekt, använd professionellt språk'
-    };
-    return toneMap[tone as keyof typeof toneMap] || toneMap.friendly;
+    // Fallback for legacy calls
+    return this.buildEnhancedSystemPrompt(botConfig, '');
   }
 
   private async callLLM(
@@ -175,18 +274,21 @@ INSTRUKTIONER:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage }
         ],
-        max_tokens: 500,
-        temperature: 0.7,
+        max_tokens: 800,
+        temperature: 0.8,
+        presence_penalty: 0.1,
+        frequency_penalty: 0.1,
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API fel: ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`OpenAI API fel: ${response.statusText} - ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const data = await response.json();
@@ -199,20 +301,23 @@ INSTRUKTIONER:
       headers: {
         'x-api-key': apiKey,
         'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01'
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'messages-2023-12-15'
       },
       body: JSON.stringify({
-        model: 'claude-3-sonnet-20240229',
-        max_tokens: 500,
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 800,
         system: systemPrompt,
         messages: [
           { role: 'user', content: userMessage }
         ],
+        temperature: 0.8,
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`Claude API fel: ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Claude API fel: ${response.statusText} - ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const data = await response.json();
@@ -227,18 +332,20 @@ INSTRUKTIONER:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'mixtral-8x7b-32768',
+        model: 'llama-3.1-70b-versatile',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage }
         ],
-        max_tokens: 500,
-        temperature: 0.7,
+        max_tokens: 800,
+        temperature: 0.8,
+        top_p: 0.9,
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`Groq API fel: ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Groq API fel: ${response.statusText} - ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const data = await response.json();

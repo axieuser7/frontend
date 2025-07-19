@@ -4,6 +4,59 @@
 (function() {
   'use strict';
 
+  // Utility functions for vanilla JS state management
+  function useState(initialValue) {
+    let value = initialValue;
+    const listeners = [];
+    
+    return [
+      () => value,
+      (newValue) => {
+        value = typeof newValue === 'function' ? newValue(value) : newValue;
+        listeners.forEach(listener => listener(value));
+      },
+      (listener) => listeners.push(listener)
+    ];
+  }
+
+  function useEffect(effect, deps) {
+    // Simplified useEffect for vanilla JS
+    effect();
+  }
+
+  function useRef(initialValue) {
+    return { current: initialValue };
+  }
+
+  // Simple createElement helper
+  function h(tag, props, ...children) {
+    const element = document.createElement(tag);
+    
+    if (props) {
+      Object.keys(props).forEach(key => {
+        if (key === 'style' && typeof props[key] === 'object') {
+          Object.assign(element.style, props[key]);
+        } else if (key.startsWith('on') && typeof props[key] === 'function') {
+          element.addEventListener(key.slice(2).toLowerCase(), props[key]);
+        } else if (key === 'className') {
+          element.className = props[key];
+        } else {
+          element.setAttribute(key, props[key]);
+        }
+      });
+    }
+    
+    children.forEach(child => {
+      if (typeof child === 'string') {
+        element.appendChild(document.createTextNode(child));
+      } else if (child) {
+        element.appendChild(child);
+      }
+    });
+    
+    return element;
+  }
+
   // Widget API Service
   class WidgetApiService {
     constructor(baseUrl, widgetId) {
@@ -31,7 +84,7 @@
         });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
-        return data.response;
+        return data.response || data;
       } catch (error) {
         console.error('Failed to send message:', error);
         throw error;
@@ -39,31 +92,38 @@
     }
   }
 
+  // Enhanced ChatWidget with better error handling and features
   function ChatWidget(props) {
     const {
       widgetId,
       baseUrl = 'https://frontenddk.netlify.app',
       position = 'bottom-right',
-      sessionId = null
+      sessionId = null,
+      theme = {},
+      behavior = {}
     } = props;
 
-    // State management (simplified vanilla JS)
+    // Enhanced state management
     const [isOpen, setIsOpen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(true);
     const [messages, setMessages] = useState([]);
     const [inputMessage, setInputMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isTyping, setIsTyping] = useState(false);
     const [botConfig, setBotConfig] = useState(null);
     const [error, setError] = useState(null);
+    const [connectionStatus, setConnectionStatus] = useState('connecting');
     const messagesEndRef = useRef(null);
 
     const apiService = new WidgetApiService(baseUrl, widgetId);
 
-    // Initialize widget
+    // Enhanced initialization
     useEffect(async () => {
       try {
+        setConnectionStatus('connecting');
         const config = await apiService.fetchBotConfig();
         setBotConfig(config);
+        setConnectionStatus('connected');
         
         // Set welcome message
         if (config.first_message || config.welcome_message) {
@@ -75,7 +135,13 @@
           };
           setMessages([welcomeMsg]);
         }
+
+        // Auto-open if configured
+        if (behavior.autoOpen) {
+          setTimeout(() => setIsOpen(true), 1000);
+        }
       } catch (err) {
+        setConnectionStatus('error');
         setError('Failed to load chatbot configuration');
         console.error('Widget initialization error:', err);
       }
@@ -87,6 +153,7 @@
       }
     }, [messages]);
 
+    // Enhanced message sending with typing indicator
     const handleSendMessage = async (e) => {
       e.preventDefault();
       if (!inputMessage.trim() || isLoading) return;
@@ -105,9 +172,15 @@
       setMessages(prev => [...prev, userMessage]);
       setInputMessage('');
       setIsLoading(true);
+      setIsTyping(true);
 
       try {
+        // Simulate typing delay for better UX
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         const response = await apiService.sendMessage(inputMessage, sessionId);
+        
+        setIsTyping(false);
         
         const aiResponse = {
           id: (Date.now() + 1).toString(),
@@ -117,8 +190,17 @@
         };
         
         setMessages(prev => [...prev, aiResponse]);
+
+        // Trigger custom event for analytics
+        if (typeof window.gtag === 'function') {
+          window.gtag('event', 'chatbot_message', {
+            event_category: 'engagement',
+            event_label: 'user_message'
+          });
+        }
       } catch (error) {
         console.error('Error sending message:', error);
+        setIsTyping(false);
         const errorResponse = {
           id: (Date.now() + 1).toString(),
           content: 'Ursäkta, jag kunde inte behandla din förfrågan just nu. Försök igen senare.',
@@ -131,55 +213,94 @@
       }
     };
 
-    // Show loading state while config loads
+    // Enhanced loading and error states
     if (!botConfig && !error) {
-      return h('div', { 
+      return h('div', {
         style: { 
           position: 'fixed', 
-          bottom: '16px', 
-          right: '16px', 
-          zIndex: 9999 
+          ...getPositionStyles(position),
+          zIndex: 9999,
+          width: '56px',
+          height: '56px',
+          borderRadius: '50%',
+          backgroundColor: '#3B82F6',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontSize: '12px'
         } 
-      }, 'Loading...');
+      }, '...');
     }
 
-    // Show error state
+    // Enhanced error state
     if (error) {
       return h('div', { 
         style: { 
           position: 'fixed', 
-          bottom: '16px', 
-          right: '16px', 
+          ...getPositionStyles(position),
           zIndex: 9999,
-          color: 'red' 
+          width: '56px',
+          height: '56px',
+          borderRadius: '50%',
+          backgroundColor: '#EF4444',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontSize: '20px',
+          cursor: 'pointer'
         } 
-      }, error);
+      }, '!');
     }
 
-    const positionClasses = {
-      'bottom-right': { bottom: '16px', right: '16px' },
-      'bottom-left': { bottom: '16px', left: '16px' },
+    // Get position styles
+    function getPositionStyles(pos) {
+      const positions = {
+        'bottom-right': { bottom: '20px', right: '20px' },
+        'bottom-left': { bottom: '20px', left: '20px' },
+      };
+      return positions[pos] || positions['bottom-right'];
+    }
+
+    // Merge theme with defaults
+    const finalTheme = {
+      primaryColor: botConfig.primary_color || '#3B82F6',
+      borderRadius: '16px',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      ...theme
+    };
+
+    // Merge behavior with defaults
+    const finalBehavior = {
+      autoOpen: false,
+      showWelcomeMessage: true,
+      enableTypingIndicator: true,
+      enableSoundNotifications: false,
+      ...behavior
     };
 
     const widgetStyle = {
       position: 'fixed',
-      ...positionClasses[position],
+      ...getPositionStyles(position),
       zIndex: 9999,
-      fontFamily: 'system-ui, -apple-system, sans-serif'
+      fontFamily: finalTheme.fontFamily
     };
 
     return h('div', { style: widgetStyle },
       // Chat-fönster
       isOpen && h('div', {
+        className: 'chatbot-widget-window',
         style: {
           marginBottom: '16px',
           backgroundColor: 'white',
-          borderRadius: '16px',
+          borderRadius: finalTheme.borderRadius,
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           border: '1px solid #e5e7eb',
           width: '320px',
           height: isMinimized ? '64px' : '384px',
-          transition: 'all 0.3s ease'
+          transition: 'all 0.3s ease',
+          overflow: 'hidden'
         }
       },
         // Header
@@ -189,8 +310,8 @@
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '16px',
-            backgroundColor: botConfig.primary_color,
-            borderRadius: '16px 16px 0 0',
+            backgroundColor: finalTheme.primaryColor,
+            borderRadius: `${finalTheme.borderRadius} ${finalTheme.borderRadius} 0 0`,
             color: 'white',
             cursor: 'pointer'
           },
@@ -208,26 +329,46 @@
                 justifyContent: 'center',
                 marginRight: '12px'
               }
-            }, h(MessageCircle, { className: 'w-5 h-5' })),
+            }, '💬'),
             h('div', {},
               h('h3', { style: { fontWeight: '600', fontSize: '14px', margin: 0 } }, botConfig.name),
-              h('p', { style: { fontSize: '12px', opacity: 0.9, margin: 0 } }, 'Online')
+              h('p', { 
+                style: { fontSize: '12px', opacity: 0.9, margin: 0 } 
+              }, connectionStatus === 'connected' ? 'Online' : connectionStatus === 'connecting' ? 'Ansluter...' : 'Offline')
             )
           ),
-          h('button', {
-            onClick: (e) => {
-              e.stopPropagation();
-              setIsOpen(false);
-            },
-            style: {
-              background: 'none',
-              border: 'none',
-              color: 'white',
-              cursor: 'pointer',
-              padding: '4px',
-              borderRadius: '4px'
-            }
-          }, '✕')
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+            h('button', {
+              onClick: (e) => {
+                e.stopPropagation();
+                setIsMinimized(!isMinimized);
+              },
+              style: {
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '4px',
+                fontSize: '16px'
+              }
+            }, isMinimized ? '⬆️' : '⬇️'),
+            h('button', {
+              onClick: (e) => {
+                e.stopPropagation();
+                setIsOpen(false);
+              },
+              style: {
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '4px',
+                fontSize: '16px'
+              }
+            }, '✕')
+          )
         ),
 
         // Chat-innehåll (endast om inte minimerad)
@@ -236,7 +377,7 @@
           h('div', {
             key: 'messages',
             style: {
-              height: '256px',
+              height: '280px',
               overflowY: 'auto',
               padding: '16px',
               backgroundColor: '#f9fafb'
@@ -255,11 +396,12 @@
                     style: {
                       maxWidth: '240px',
                       padding: '8px 12px',
-                      borderRadius: '16px',
+                      borderRadius: '12px',
                       fontSize: '14px',
-                      backgroundColor: message.role === 'user' ? botConfig.primaryColor : 'white',
+                      backgroundColor: message.role === 'user' ? finalTheme.primaryColor : 'white',
                       color: message.role === 'user' ? 'white' : '#374151',
-                      border: message.role === 'assistant' ? '1px solid #e5e7eb' : 'none'
+                      border: message.role === 'assistant' ? '1px solid #e5e7eb' : 'none',
+                      wordWrap: 'break-word'
                     }
                   },
                     h('p', { style: { margin: 0 } }, message.content),
@@ -273,7 +415,7 @@
                   )
                 )
               ),
-              isLoading && h('div', {
+              (isLoading || isTyping) && finalBehavior.enableTypingIndicator && h('div', {
                 style: { display: 'flex', justifyContent: 'flex-start' }
               },
                 h('div', {
@@ -281,7 +423,7 @@
                     backgroundColor: 'white',
                     border: '1px solid #e5e7eb',
                     padding: '8px 12px',
-                    borderRadius: '16px',
+                    borderRadius: '12px',
                     display: 'flex',
                     gap: '4px'
                   }
@@ -302,7 +444,7 @@
               padding: '16px',
               borderTop: '1px solid #e5e7eb',
               backgroundColor: 'white',
-              borderRadius: '0 0 16px 16px'
+              borderRadius: `0 0 ${finalTheme.borderRadius} ${finalTheme.borderRadius}`
             }
           },
             h('form', {
@@ -321,7 +463,8 @@
                   border: '1px solid #d1d5db',
                   borderRadius: '20px',
                   fontSize: '14px',
-                  outline: 'none'
+                  outline: 'none',
+                  fontFamily: finalTheme.fontFamily
                 }
               }),
               h('button', {
@@ -330,13 +473,14 @@
                 style: {
                   padding: '8px',
                   borderRadius: '50%',
-                  backgroundColor: botConfig.primaryColor,
+                  backgroundColor: finalTheme.primaryColor,
                   color: 'white',
                   border: 'none',
                   cursor: 'pointer',
-                  opacity: (!inputMessage.trim() || isLoading) ? 0.5 : 1
+                  opacity: (!inputMessage.trim() || isLoading) ? 0.5 : 1,
+                  fontSize: '14px'
                 }
-              }, '→')
+              }, isLoading ? '...' : '→')
             )
           )
         ]
@@ -344,12 +488,13 @@
 
       // Chat-knapp
       h('button', {
+        className: 'chatbot-widget-button',
         onClick: () => setIsOpen(!isOpen),
         style: {
           width: '56px',
           height: '56px',
           borderRadius: '50%',
-          backgroundColor: botConfig.primary_color,
+          backgroundColor: finalTheme.primaryColor,
           color: 'white',
           border: 'none',
           cursor: 'pointer',
@@ -358,38 +503,88 @@
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: '24px',
-          transition: 'all 0.2s ease'
+          transition: 'all 0.2s ease',
+          fontFamily: finalTheme.fontFamily
         }
-      }, isOpen ? h(X, { className: 'w-6 h-6' }) : h(MessageCircle, { className: 'w-6 h-6' }))
+      }, isOpen ? '✕' : '💬')
     );
+  }
+
+  // Enhanced rendering function
+  function renderChatWidget(container, config) {
+    const widget = ChatWidget(config);
+    container.appendChild(widget);
+    
+    // Trigger loaded event
+    if (typeof window.gtag === 'function') {
+      window.gtag('event', 'chatbot_loaded', {
+        event_category: 'engagement',
+        event_label: config.widgetId
+      });
+    }
   }
 
   // Automatisk initialisering om config finns
   if (typeof window !== 'undefined' && window.ChatbotConfig) {
-    // Initialize widget with configuration
-    const config = window.ChatbotConfig;
-    if (config.widgetId) {
-      const container = document.getElementById('chatbot-widget') || document.body;
-      const widget = document.createElement('div');
-      widget.id = 'chatbot-widget-instance';
-      container.appendChild(widget);
-      
-      // Render widget (simplified without React dependency)
-      renderChatWidget(widget, config);
+    // Wait for DOM to be ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeWidget);
+    } else {
+      initializeWidget();
+    }
+    
+    function initializeWidget() {
+      const config = window.ChatbotConfig;
+      if (config.widgetId) {
+        const container = document.getElementById('chatbot-widget') || document.body;
+        const widget = document.createElement('div');
+        widget.id = 'chatbot-widget-instance';
+        container.appendChild(widget);
+        
+        renderChatWidget(widget, config);
+      }
     }
   }
 
   // Exportera för manuell användning
   if (typeof window !== 'undefined') {
     window.ChatWidget = ChatWidget;
+    window.ChatbotPro = {
+      version: '1.0.0',
+      init: renderChatWidget,
+      ChatWidget: ChatWidget
+    };
   }
 
-  // CSS för animationer
+  // Enhanced CSS för animationer och responsivitet
   const style = document.createElement('style');
   style.textContent = `
     @keyframes bounce {
       0%, 80%, 100% { transform: translateY(0); }
       40% { transform: translateY(-6px); }
+    }
+    
+    .chatbot-widget-button:hover {
+      transform: scale(1.05);
+    }
+    
+    .chatbot-widget-window {
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    
+    @media (max-width: 768px) {
+      .chatbot-widget-window {
+        width: calc(100vw - 40px) !important;
+        max-width: 350px !important;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .chatbot-widget-window {
+        width: calc(100vw - 20px) !important;
+        height: 70vh !important;
+        max-height: 500px !important;
+      }
     }
   `;
   document.head.appendChild(style);
