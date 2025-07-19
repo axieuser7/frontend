@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { getBaseUrl, getWidgetScriptUrl } from '../../lib/config';
 import { Copy, Code, Eye, Download, ExternalLink } from 'lucide-react';
 import { BotConfig } from '../../types';
 
@@ -48,9 +49,10 @@ export function WidgetGenerator({ userId }: WidgetGeneratorProps) {
   const generateEmbedCode = () => {
     if (!botConfig) return '';
     
+    const baseUrl = getBaseUrl();
     const config = {
       widgetId: botConfig.id,
-      baseUrl: window.location.origin,
+      baseUrl: baseUrl,
       position: position,
       sessionId: null, // Optional: for chat history
     };
@@ -60,7 +62,7 @@ export function WidgetGenerator({ userId }: WidgetGeneratorProps) {
 <script>
   window.ChatbotConfig = ${JSON.stringify(config, null, 2)};
 </script>
-<script src="${window.location.origin}/chatbot-widget.js"></script>
+<script src="${getWidgetScriptUrl()}"></script>
 
 <!-- För anpassad styling (valfritt) -->
 <style>
@@ -73,6 +75,8 @@ export function WidgetGenerator({ userId }: WidgetGeneratorProps) {
   const generateReactCode = () => {
     if (!botConfig) return '';
     
+    const baseUrl = getBaseUrl();
+    
     return `import { ChatWidget } from '@din-organisation/chatbot-widget';
 
 function App() {
@@ -83,7 +87,7 @@ function App() {
       
       <ChatWidget
         widgetId="${botConfig.id}"
-        baseUrl="${window.location.origin}"
+        baseUrl="${baseUrl}"
         position="${position}"
         sessionId={null} // Optional: för chat-historik
       />

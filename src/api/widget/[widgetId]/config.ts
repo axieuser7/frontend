@@ -1,5 +1,6 @@
 // API endpoint to fetch widget configuration
 import { supabase } from '../../../lib/supabase';
+import { config } from '../../../lib/config';
 
 export async function GET(request: Request, { params }: { params: { widgetId: string } }) {
   try {
@@ -58,7 +59,7 @@ export async function GET(request: Request, { params }: { params: { widgetId: st
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': config.cors.allowedOrigins.join(', '),
         'Access-Control-Allow-Methods': 'GET',
         'Access-Control-Allow-Headers': 'Content-Type',
       },
