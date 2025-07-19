@@ -208,7 +208,7 @@
                 justifyContent: 'center',
                 marginRight: '12px'
               }
-            }, '💬'),
+            }, h(MessageCircle, { className: 'w-5 h-5' })),
             h('div', {},
               h('h3', { style: { fontWeight: '600', fontSize: '14px', margin: 0 } }, botConfig.name),
               h('p', { style: { fontSize: '12px', opacity: 0.9, margin: 0 } }, 'Online')
@@ -360,7 +360,7 @@
           fontSize: '24px',
           transition: 'all 0.2s ease'
         }
-      }, isOpen ? '✕' : '💬')
+      }, isOpen ? h(X, { className: 'w-6 h-6' }) : h(MessageCircle, { className: 'w-6 h-6' }))
     );
   }
 

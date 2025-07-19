@@ -2,7 +2,7 @@
 
 En komplett, anpassningsbar chatbot-plattform byggd med React, TypeScript och Supabase.
 
-## 🚀 Funktioner
+## Funktioner
 
 - **Användarautentisering** - Säker inloggning via Supabase Auth
 - **Anpassningsbara chatbots** - Konfigurera personlighet, tonfall och utseende
@@ -13,7 +13,7 @@ En komplett, anpassningsbar chatbot-plattform byggd med React, TypeScript och Su
 - **Responsiv design** - Fungerar perfekt på alla enheter
 - **Svenska språkstöd** - Fullständigt lokaliserat gränssnitt
 
-## 🛠️ Teknisk stack
+## Teknisk stack
 
 - **Frontend**: React 18, TypeScript, Tailwind CSS
 - **Backend**: Supabase (Auth, Database, Storage)
@@ -21,13 +21,13 @@ En komplett, anpassningsbar chatbot-plattform byggd med React, TypeScript och Su
 - **Ikoner**: Lucide React
 - **Build tool**: Vite
 
-## 📋 Krav
+## Krav
 
 - Node.js 18+ 
 - npm eller yarn
 - Supabase-konto
 
-## ⚡ Snabbstart
+## Snabbstart
 
 1. **Klona projektet**
    ```bash
@@ -58,7 +58,7 @@ En komplett, anpassningsbar chatbot-plattform byggd med React, TypeScript och Su
    npm run dev
    ```
 
-## 🗄️ Databasschema
+## Databasschema
 
 Plattformen använder följande tabeller:
 
@@ -68,14 +68,14 @@ Plattformen använder följande tabeller:
 - `chat_sessions` - Chat-sessioner
 - `chat_messages` - Chat-meddelanden
 
-## 🔐 Säkerhet
+## Säkerhet
 
 - **Row Level Security (RLS)** aktiverat på alla tabeller
 - **API-nycklar krypteras** innan lagring
 - **Användarseparation** - användare kan endast se sina egna data
 - **Autentisering krävs** för alla känsliga operationer
 
-## 📱 Användning
+## Användning
 
 1. **Registrera/Logga in** - Skapa ett konto eller logga in
 2. **Konfigurera din bot** - Anpassa namn, personlighet och utseende
@@ -84,7 +84,7 @@ Plattformen använder följande tabeller:
 5. **Generera widget-kod** - Skapa inbäddningskod för kundens webbplats
 6. **Implementera på webbplats** - Klistra in koden och börja chatta
 
-## 🔗 Widget-inbäddning
+## Widget-inbäddning
 
 Plattformen genererar automatiskt inbäddningskod för:
 
@@ -126,7 +126,7 @@ function App() {
 - **Squarespace** - Code injection
 - **Wix** - HTML embed
 
-## 🔌 LLM-integration
+## LLM-integration
 
 Plattformen stöder:
 - **OpenAI** (GPT-3.5, GPT-4)
@@ -137,7 +137,7 @@ Lägg till fler providers genom att uppdatera:
 - `src/types/index.ts` - Lägg till provider-typ
 - `src/components/ApiKeys/ApiKeyManager.tsx` - Lägg till UI-stöd
 
-## 🎨 Anpassning
+## Anpassning
 
 ### Widget-anpassning
 Widgeten kan anpassas med:
@@ -159,7 +159,7 @@ Modulär arkitektur gör det enkelt att lägga till nya funktioner:
 - `src/lib/` - Utilities och konfiguration
 - `src/types/` - TypeScript-typdefinitioner
 
-## 📚 API-referens
+## API-referens
 
 ### Auth Context
 ```typescript
@@ -182,7 +182,7 @@ const { error } = await supabase
   .insert({ name: 'Min Bot', user_id: user.id });
 ```
 
-## 🚀 Deployment
+## Deployment
 
 ### Netlify
 ```bash
@@ -196,7 +196,7 @@ npm run build
 vercel --prod
 ```
 
-## 🤝 Bidrag
+## Bidrag
 
 1. Forka projektet
 2. Skapa en feature branch (`git checkout -b feature/ny-funktion`)
@@ -204,11 +204,11 @@ vercel --prod
 4. Pusha till branchen (`git push origin feature/ny-funktion`)
 5. Skapa en Pull Request
 
-## 📝 Licens
+## Licens
 
 MIT License - se [LICENSE](LICENSE) för detaljer.
 
-## 🆘 Support
+## Support
 
 - **Dokumentation**: Se README och kommentarer i koden
 - **Issues**: Rapportera buggar via GitHub Issues
@@ -216,4 +216,4 @@ MIT License - se [LICENSE](LICENSE) för detaljer.
 
 ---
 
-Byggd med ❤️ av svenska utvecklare för svenska användare.
+Byggd med kärlek av svenska utvecklare för svenska användare.
