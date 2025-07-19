@@ -7,7 +7,7 @@ export function ChatInterface() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      content: 'Hej! Jag är din AI-assistent. Hur kan jag hjälpa dig idag? 🤖',
+      content: 'Hej! Jag är din AI-assistent. Hur kan jag hjälpa dig idag?',
       role: 'assistant',
       timestamp: new Date(),
     }
@@ -66,7 +66,7 @@ export function ChatInterface() {
       const lowerMessage = textToSend.toLowerCase();
       
       if (lowerMessage.includes('hjälpa') || lowerMessage.includes('funktioner')) {
-        response = `Som ${botConfig.name} kan jag hjälpa dig med många saker! 🚀
+        response = `Som ${botConfig.name} kan jag hjälpa dig med många saker!
 
 • Svara på frågor om ditt företag
 • Ge kundservice 24/7
@@ -76,7 +76,7 @@ export function ChatInterface() {
 
 Jag är tränad att vara ${botConfig.tone === 'friendly' ? 'vänlig och hjälpsam' : 'professionell och effektiv'} i alla interaktioner. Vad skulle du vilja veta mer om?`;
       } else if (lowerMessage.includes('ai') || lowerMessage.includes('chatbot')) {
-        response = `AI-chatbots som jag fungerar genom att använda avancerad språkteknologi! 🧠
+        response = `AI-chatbots som jag fungerar genom att använda avancerad språkteknologi!
 
 **Så här fungerar det:**
 1. **Naturlig språkförståelse** - Jag förstår vad du menar, inte bara vad du skriver
@@ -86,15 +86,15 @@ Jag är tränad att vara ${botConfig.tone === 'friendly' ? 'vänlig och hjälpsa
 
 Vill du veta mer om någon specifik del?`;
       } else if (lowerMessage.includes('kundservice') || lowerMessage.includes('tips')) {
-        response = `Här är mina bästa tips för excellent kundservice! ⭐
+        response = `Här är mina bästa tips för excellent kundservice!
 
-**🎯 Viktiga principer:**
+**Viktiga principer:**
 • **Lyssna aktivt** - Förstå kundens verkliga behov
 • **Var proaktiv** - Förutse och lös problem innan de uppstår
 • **Personalisera** - Behandla varje kund som en individ
 • **Följ upp** - Se till att kunden är nöjd med lösningen
 
-**🤖 Hur AI kan hjälpa:**
+**Hur AI kan hjälpa:**
 • Snabba svar 24/7
 • Konsekvent kvalitet
 • Hantera flera kunder samtidigt
@@ -110,7 +110,7 @@ I en riktig implementation skulle jag:
 • Ge mer exakta och anpassade svar
 • Komma ihåg tidigare konversationer
 
-${botConfig.tone === 'friendly' ? 'Är det något annat jag kan hjälpa dig med? 😊' : 'Hur kan jag assistera er vidare?'}`;
+${botConfig.tone === 'friendly' ? 'Är det något annat jag kan hjälpa dig med?' : 'Hur kan jag assistera er vidare?'}`;
       }
 
       setIsTyping(false);
@@ -128,7 +128,7 @@ ${botConfig.tone === 'friendly' ? 'Är det något annat jag kan hjälpa dig med?
       setIsTyping(false);
       const errorResponse: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        content: 'Ursäkta, jag kunde inte behandla din förfrågan just nu. Försök igen senare. 😔',
+        content: 'Ursäkta, jag kunde inte behandla din förfrågan just nu. Försök igen senare.',
         role: 'assistant',
         timestamp: new Date(),
       };
@@ -141,7 +141,7 @@ ${botConfig.tone === 'friendly' ? 'Är det något annat jag kan hjälpa dig med?
   const resetChat = () => {
     setMessages([{
       id: '1',
-      content: 'Hej! Jag är din AI-assistent. Hur kan jag hjälpa dig idag? 🤖',
+      content: 'Hej! Jag är din AI-assistent. Hur kan jag hjälpa dig idag?',
       role: 'assistant',
       timestamp: new Date(),
     }]);

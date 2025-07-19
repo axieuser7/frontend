@@ -281,7 +281,7 @@ function App() {
 
         {/* Säkerhetsinformation */}
         <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <h4 className="font-semibold text-yellow-900 mb-2">🔒 Säkerhet & Prestanda</h4>
+          <h4 className="font-semibold text-yellow-900 mb-2">Säkerhet & Prestanda</h4>
           <p className="text-yellow-800 text-sm">
             Widgeten ansluter säkert till våra servrar via Widget ID. Inga API-nycklar eller känslig data 
             exponeras i frontend-koden. All AI-kommunikation sker via vår säkra backend.

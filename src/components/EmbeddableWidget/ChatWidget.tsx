@@ -136,7 +136,7 @@ export function ChatWidget({
               </div>
               <div>
                 <h3 className="font-semibold text-sm">{botConfig.name}</h3>
-                <p className="text-xs opacity-90">Online</p>
+                <MessageCircle className="w-6 h-6 text-white" />
               </div>
             </div>
             <div className="flex items-center space-x-2">
