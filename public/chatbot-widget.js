@@ -131,10 +131,10 @@
         setConnectionStatus('connected');
         
         // Set welcome message
-        if (config.first_message || config.welcome_message) {
+        if (config.welcome_message) {
           const welcomeMsg = {
             id: 'welcome',
-            content: config.first_message || config.welcome_message,
+            content: config.welcome_message,
             role: 'assistant',
             timestamp: new Date(),
           };
