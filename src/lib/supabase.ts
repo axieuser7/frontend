@@ -8,7 +8,13 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('VITE_SUPABASE_URL och VITE_SUPABASE_ANON_KEY måste vara konfigurerade i .env filen');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
+});
 
 // Hjälpfunktioner för autentisering
 export const authHelpers = {

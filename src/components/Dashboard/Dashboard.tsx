@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useRealtimeConfig } from '../../context/RealtimeConfigContext';
 import { BotConfig } from '../BotConfig/BotConfig';
 import { ChatInterface } from '../Chat/ChatInterface';
 import { ApiKeyManager } from '../ApiKeys/ApiKeyManager';
@@ -25,23 +26,11 @@ import {
 
 export function Dashboard() {
   const { user, signOut } = useAuth();
+  const { botConfig, isConnected, lastUpdate } = useRealtimeConfig();
   
   const [activeTab, setActiveTab] = useState<'overview' | 'chat' | 'config' | 'api-keys' | 'supabase' | 'vector-store' | 'widget'>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [liveConfig, setLiveConfig] = useState(null);
 
-  // Listen for real-time config updates
-  React.useEffect(() => {
-    const handleConfigUpdate = (event: CustomEvent) => {
-      setLiveConfig(event.detail);
-    };
-
-    window.addEventListener('botConfigUpdated', handleConfigUpdate as EventListener);
-
-    return () => {
-      window.removeEventListener('botConfigUpdated', handleConfigUpdate as EventListener);
-    };
-  }, []);
 
   if (!user) {
     return null;
@@ -290,11 +279,18 @@ export function Dashboard() {
               </button>
               <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors relative">
                 <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                {isConnected && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"></span>
+                )}
               </button>
               <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                 <HelpCircle className="w-5 h-5" />
               </button>
+              {lastUpdate && (
+                <div className="text-xs text-gray-500">
+                  Uppdaterad: {lastUpdate.toLocaleTimeString('sv-SE')}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -302,12 +298,12 @@ export function Dashboard() {
         {/* Page Content */}
         <main className="p-6">
           {activeTab === 'overview' && <OverviewComponent />}
-          {activeTab === 'chat' && <ChatInterface key={liveConfig ? JSON.stringify(liveConfig) : 'default'} />}
+          {activeTab === 'chat' && <ChatInterface key={botConfig?.id || 'default'} />}
           {activeTab === 'config' && <BotConfig />}
           {activeTab === 'api-keys' && <ApiKeyManager />}
           {activeTab === 'supabase' && <SupabaseConfigManager />}
           {activeTab === 'vector-store' && <VectorStoreManager />}
-          {activeTab === 'widget' && <WidgetGenerator userId={user.id} key={liveConfig ? JSON.stringify(liveConfig) : 'default'} />}
+          {activeTab === 'widget' && <WidgetGenerator userId={user.id} key={botConfig?.id || 'default'} />}
         </main>
       </div>
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useRealtimeConfig } from '../../context/RealtimeConfigContext';
 import { supabase } from '../../lib/supabase';
 import { getBaseUrl, getWidgetScriptUrl } from '../../lib/config';
 import { Copy, Code, Eye, Download, ExternalLink } from 'lucide-react';
@@ -11,46 +12,17 @@ interface WidgetGeneratorProps {
 
 export function WidgetGenerator({ userId }: WidgetGeneratorProps) {
   const { user } = useAuth();
-  const [botConfig, setBotConfig] = useState<BotConfig | null>(null);
+  const { botConfig } = useRealtimeConfig();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [position, setPosition] = useState<'bottom-right' | 'bottom-left'>('bottom-right');
   const [showPreview, setShowPreview] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Load user's bot config
   React.useEffect(() => {
-    if (user) {
-      loadBotConfig();
-    }
-  }, [user]);
-
-  const loadBotConfig = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('bot_configs')
-        .select('*')
-        .eq('user_id', user!.id)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error loading bot config:', error);
-        throw error;
-      }
-
-      if (data) {
-        setBotConfig(data);
-      } else {
-        // No configuration exists yet
-        setBotConfig(null);
-      }
-    } catch (err) {
-      console.error('Error loading bot config:', err);
-      setError('Kunde inte ladda bot-konfiguration');
-    } finally {
-      setLoading(false);
-    }
-  };
+    // Set loading to false when we have config data or confirmed no config
+    setLoading(false);
+  }, [botConfig]);
 
   const generateEmbedCode = () => {
     if (!botConfig) return '';
