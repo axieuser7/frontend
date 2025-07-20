@@ -55,14 +55,29 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
         .from('bot_configs')
         .select('*') 
         .eq('user_id', user!.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
+        console.error('Error loading bot config:', error);
         throw error;
       }
       
       if (data) {
         setConfig(data);
+      } else {
+        // Use default configuration if none exists
+        setConfig({
+          id: '',
+          user_id: user!.id,
+          name: 'AI Assistant',
+          system_prompt: 'Du är en hjälpsam AI-assistent som svarar på svenska och hjälper användare med deras frågor.',
+          tone: 'friendly',
+          primary_color: '#2563EB',
+          welcome_message: 'Hej! Hur kan jag hjälpa dig idag?',
+          company_information: '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
       }
     } catch (error) {
       console.error('Error fetching bot config:', error);

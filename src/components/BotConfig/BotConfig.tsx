@@ -8,11 +8,11 @@ export function BotConfig() {
   const { user } = useAuth();
   const [config, setConfig] = useState<Partial<BotConfigType>>({
     name: 'AI Assistant',
-    system_prompt: 'Du är en hjälpsam AI-assistent som svarar på svenska och hjälper användare med deras frågor.',
+    system_prompt: 'Du är en hjälpsam AI-assistent som svarar på svenska och hjälper användare med deras frågor. Svara alltid på svenska och var hjälpsam och professionell.',
     tone: 'friendly',
     primary_color: '#2563EB',
     welcome_message: 'Hej! Hur kan jag hjälpa dig idag?',
-    first_message: 'Välkommen! Jag är här för att hjälpa dig.',
+    company_information: '',
   });
 
   const [saving, setSaving] = useState(false);
@@ -33,14 +33,18 @@ export function BotConfig() {
         .from('bot_configs')
         .select('*')
         .eq('user_id', user!.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
+        console.error('Error loading bot config:', error);
         throw error;
       }
 
       if (data) {
         setConfig(data);
+      } else {
+        // No configuration exists yet, keep defaults
+        console.log('No bot configuration found, using defaults');
       }
     } catch (err) {
       console.error('Error loading bot config:', err);
@@ -227,15 +231,18 @@ export function BotConfig() {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  Första meddelande
+                  Företagsinformation
                 </label>
                 <textarea
-                  value={config.first_message || ''}
-                  onChange={(e) => setConfig(prev => ({ ...prev, first_message: e.target.value }))}
-                  rows={2}
+                  value={config.company_information || ''}
+                  onChange={(e) => setConfig(prev => ({ ...prev, company_information: e.target.value }))}
+                  rows={4}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
-                  placeholder="Välkommen! Jag är här för att hjälpa dig."
+                  placeholder="Beskriv ditt företag, produkter, tjänster och annan relevant information som chatboten ska känna till..."
                 />
+                <p className="text-sm text-gray-500 mt-2">
+                  Denna information hjälper chatboten att ge mer relevanta och personliga svar om ditt företag.
+                </p>
               </div>
             </div>
           </div>
@@ -380,7 +387,7 @@ export function BotConfig() {
                 <div className="flex justify-start">
                   <div className="bg-white rounded-lg p-3 max-w-xs border border-gray-200">
                     <p className="text-sm text-gray-900">
-                      {config.first_message || config.welcome_message || 'Hej! Hur kan jag hjälpa dig idag?'}
+                      {config.welcome_message || 'Hej! Hur kan jag hjälpa dig idag?'}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">12:34</p>
                   </div>
