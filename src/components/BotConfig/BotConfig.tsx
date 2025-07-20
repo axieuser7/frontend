@@ -6,7 +6,7 @@ import { BotConfig as BotConfigType } from '../../types';
 
 export function BotConfig() {
   const { user } = useAuth();
-  const { botConfig: realtimeConfig, updateConfig, isConnected, loading, error: contextError } = useRealtimeConfig();
+  const { botConfig: realtimeConfig, updateConfig, isConnected, loading, error: contextError, saveToUserSupabase } = useRealtimeConfig();
   
   const [localConfig, setLocalConfig] = useState<Partial<BotConfigType>>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -64,7 +64,11 @@ export function BotConfig() {
       
       setLocalConfig({});
       setHasUnsavedChanges(false);
-      setSuccess('Konfiguration sparad framgångsrikt!');
+      setSuccess(
+        saveToUserSupabase 
+          ? 'Konfiguration sparad till ditt Supabase-projekt!' 
+          : 'Konfiguration sparad framgångsrikt!'
+      );
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Error saving bot config:', err);
@@ -149,6 +153,12 @@ export function BotConfig() {
                 <div className={`w-2 h-2 rounded-full mr-2 ${isConnected ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
                 {isConnected ? 'Live-uppdateringar aktiva' : 'Ansluter...'}
               </div>
+              {saveToUserSupabase && (
+                <div className="flex items-center text-sm text-blue-200">
+                  <div className="w-2 h-2 rounded-full mr-2 bg-blue-400"></div>
+                  Sparar till ditt Supabase
+                </div>
+              )}
               {hasUnsavedChanges && (
                 <div className="flex items-center text-sm text-orange-200">
                   <div className="w-2 h-2 rounded-full mr-2 bg-orange-400"></div>

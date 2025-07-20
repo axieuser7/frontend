@@ -1,15 +1,20 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useRealtimeConfig } from '../../context/RealtimeConfigContext';
 import { supabase } from '../../lib/supabase';
-import { Plus, Database, Eye, EyeOff, Trash2, ExternalLink } from 'lucide-react';
+import { userSupabaseService } from '../../lib/userSupabaseService';
+import { Plus, Database, Eye, EyeOff, Trash2, ExternalLink, CheckCircle, AlertCircle, Settings } from 'lucide-react';
 import { SupabaseConfig } from '../../types';
 
 export function SupabaseConfigManager() {
   const { user } = useAuth();
+  const { saveToUserSupabase, setSaveToUserSupabase } = useRealtimeConfig();
   const [configs, setConfigs] = useState<SupabaseConfig[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [testingConnection, setTestingConnection] = useState<string | null>(null);
   const [newConfig, setNewConfig] = useState({
     project_name: '',
     project_url: '',
@@ -112,6 +117,36 @@ export function SupabaseConfigManager() {
     return key.substring(0, 8) + '••••••••' + key.substring(key.length - 8);
   };
 
+  const handleTestConnection = async (config: SupabaseConfig) => {
+    setTestingConnection(config.id);
+    setError('');
+    setSuccess('');
+
+    try {
+      const result = await userSupabaseService.testConnection(config);
+      
+      if (result.success) {
+        setSuccess(`Anslutning till ${config.project_name} lyckades!`);
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        setError(`Anslutningsfel för ${config.project_name}: ${result.error}`);
+      }
+    } catch (err) {
+      setError(`Kunde inte testa anslutning: ${err instanceof Error ? err.message : 'Okänt fel'}`);
+    } finally {
+      setTestingConnection(null);
+    }
+  };
+
+  const handleSetAsDefault = async (config: SupabaseConfig) => {
+    setSaveToUserSupabase(true);
+    setSuccess(`${config.project_name} är nu inställt som standard för att spara konfigurationer.`);
+    setTimeout(() => setSuccess(''), 3000);
+    
+    // Clear cache to force reload
+    userSupabaseService.clearCache();
+  };
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto">
@@ -151,28 +186,64 @@ export function SupabaseConfigManager() {
           </div>
         )}
 
+        {success && (
+          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center">
+            <CheckCircle className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+            <p className="text-green-700 text-sm">{success}</p>
+          </div>
+        )}
+
         {/* Info-box */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <h3 className="font-semibold text-blue-900 mb-2">Vad är detta?</h3>
           <p className="text-blue-800 text-sm mb-3">
-            Här konfigurerar du anslutningen till ditt Supabase-projekt där din kunskapsbas och företagsinformation lagras. 
-            Detta gör att din chatbot kan använda RAG (Retrieval-Augmented Generation) för att ge mer exakta svar.
+            Konfigurera anslutning till ditt eget Supabase-projekt. När du sparar bot-konfigurationer kommer de att lagras 
+            i DITT projekt istället för vårt. Detta ger dig full kontroll över dina data och möjliggör RAG-funktionalitet.
           </p>
           <div className="space-y-2 text-blue-800 text-sm">
             <div className="flex items-start">
               <span className="w-2 h-2 bg-blue-600 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-              <span><strong>Project URL:</strong> Hittas i dina Supabase-projektinställningar</span>
+              <span><strong>Automatisk tabellskapning:</strong> Vi skapar nödvändiga tabeller automatiskt</span>
             </div>
             <div className="flex items-start">
               <span className="w-2 h-2 bg-blue-600 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-              <span><strong>Anon Key:</strong> Den publika nyckeln för frontend-åtkomst</span>
+              <span><strong>Data-isolering:</strong> Dina konfigurationer lagras endast i ditt projekt</span>
             </div>
             <div className="flex items-start">
               <span className="w-2 h-2 bg-blue-600 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-              <span><strong>Service Role Key:</strong> (Valfri) För backend-operationer</span>
+              <span><strong>RAG-stöd:</strong> Möjliggör kunskapsbas och vector search</span>
             </div>
           </div>
         </div>
+
+        {/* Save Preference */}
+        {configs.length > 0 && (
+          <div className="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-green-900 mb-1">Automatisk sparning till ditt Supabase</h3>
+                <p className="text-green-800 text-sm">
+                  När aktiverat sparas alla bot-konfigurationer automatiskt till ditt eget Supabase-projekt.
+                </p>
+              </div>
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={saveToUserSupabase}
+                  onChange={(e) => setSaveToUserSupabase(e.target.checked)}
+                  className="sr-only"
+                />
+                <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  saveToUserSupabase ? 'bg-green-600' : 'bg-gray-300'
+                }`}>
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    saveToUserSupabase ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </div>
+              </label>
+            </div>
+          </div>
+        )}
 
         {/* Lägg till konfiguration-formulär */}
         {showAddForm && (
@@ -226,6 +297,9 @@ export function SupabaseConfigManager() {
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                   placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Krävs för automatisk tabellskapning. Rekommenderas starkt.
+                </p>
               </div>
               <div className="flex space-x-3">
                 <button
@@ -286,6 +360,25 @@ export function SupabaseConfigManager() {
                         <ExternalLink className="w-4 h-4" />
                       </a>
                       <button
+                        onClick={() => handleTestConnection(config)}
+                        disabled={testingConnection === config.id}
+                        className="p-2 text-green-500 hover:text-green-700 transition-colors disabled:opacity-50"
+                        title="Testa anslutning"
+                      >
+                        {testingConnection === config.id ? (
+                          <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                          <CheckCircle className="w-4 h-4" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleSetAsDefault(config)}
+                        className="p-2 text-purple-500 hover:text-purple-700 transition-colors"
+                        title="Sätt som standard"
+                      >
+                        <Settings className="w-4 h-4" />
+                      </button>
+                      <button
                         onClick={() => handleDeleteConfig(config.id)}
                         className="p-2 text-red-500 hover:text-red-700 transition-colors"
                         title="Ta bort konfiguration"
@@ -327,13 +420,28 @@ export function SupabaseConfigManager() {
           )}
         </div>
 
-        {/* Hjälpsektion */}
-        <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <h4 className="font-semibold text-yellow-900 mb-2">Tips för att komma igång</h4>
-          <div className="space-y-2 text-yellow-800 text-sm">
-            <p>1. Skapa tabeller i ditt Supabase-projekt för kunskapsbas och företagsinformation</p>
-            <p>2. Ladda upp dina dokument och skapa embeddings</p>
-            <p>3. Din chatbot kommer automatiskt att använda denna information för bättre svar</p>
+        {/* Förbättrad hjälpsektion */}
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h4 className="font-semibold text-blue-900 mb-2">🚀 Kom igång snabbt</h4>
+            <div className="space-y-2 text-blue-800 text-sm">
+              <p>1. Lägg till ditt Supabase-projekt ovan</p>
+              <p>2. Inkludera Service Role Key för automatisk setup</p>
+              <p>3. Testa anslutningen med ✓-knappen</p>
+              <p>4. Aktivera automatisk sparning</p>
+              <p>5. Dina konfigurationer sparas nu i DITT projekt!</p>
+            </div>
+          </div>
+          
+          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+            <h4 className="font-semibold text-green-900 mb-2">✨ Fördelar</h4>
+            <div className="space-y-2 text-green-800 text-sm">
+              <p>• Full kontroll över dina data</p>
+              <p>• Automatisk tabellskapning</p>
+              <p>• RAG och vector search-stöd</p>
+              <p>• Ingen data-lock-in</p>
+              <p>• Skalbar arkitektur</p>
+            </div>
           </div>
         </div>
       </div>
