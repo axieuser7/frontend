@@ -28,6 +28,20 @@ export function Dashboard() {
   
   const [activeTab, setActiveTab] = useState<'overview' | 'chat' | 'config' | 'api-keys' | 'supabase' | 'vector-store' | 'widget'>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [liveConfig, setLiveConfig] = useState(null);
+
+  // Listen for real-time config updates
+  React.useEffect(() => {
+    const handleConfigUpdate = (event: CustomEvent) => {
+      setLiveConfig(event.detail);
+    };
+
+    window.addEventListener('botConfigUpdated', handleConfigUpdate as EventListener);
+
+    return () => {
+      window.removeEventListener('botConfigUpdated', handleConfigUpdate as EventListener);
+    };
+  }, []);
 
   if (!user) {
     return null;
@@ -288,12 +302,12 @@ export function Dashboard() {
         {/* Page Content */}
         <main className="p-6">
           {activeTab === 'overview' && <OverviewComponent />}
-          {activeTab === 'chat' && <ChatInterface />}
+          {activeTab === 'chat' && <ChatInterface key={liveConfig ? JSON.stringify(liveConfig) : 'default'} />}
           {activeTab === 'config' && <BotConfig />}
           {activeTab === 'api-keys' && <ApiKeyManager />}
           {activeTab === 'supabase' && <SupabaseConfigManager />}
           {activeTab === 'vector-store' && <VectorStoreManager />}
-          {activeTab === 'widget' && <WidgetGenerator userId={user.id} />}
+          {activeTab === 'widget' && <WidgetGenerator userId={user.id} key={liveConfig ? JSON.stringify(liveConfig) : 'default'} />}
         </main>
       </div>
 

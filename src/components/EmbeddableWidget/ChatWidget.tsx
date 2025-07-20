@@ -40,13 +40,13 @@ export function ChatWidget({
       // Lägg till välkomstmeddelande
       const welcomeMsg: ChatMessage = {
         id: 'welcome',
-        content: botConfig.first_message || botConfig.welcome_message,
+        content: botConfig.welcome_message,
         role: 'assistant',
         timestamp: new Date(),
       };
       setMessages([welcomeMsg]);
     }
-  }, [isOpen, botConfig.first_message, botConfig.welcome_message, messages.length]);
+  }, [isOpen, botConfig.welcome_message, messages.length]);
 
   useEffect(() => {
     scrollToBottom();

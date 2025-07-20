@@ -15,7 +15,6 @@ export interface BotConfig {
   primary_color: string;
   avatar_url?: string;
   welcome_message: string;
-  first_message: string;
   company_information?: string;
   created_at: string;
   updated_at: string;

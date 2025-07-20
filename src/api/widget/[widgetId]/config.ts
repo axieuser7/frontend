@@ -15,12 +15,11 @@ export async function GET(request: Request, { params }: { params: { widgetId: st
         tone,
         primary_color,
         welcome_message,
-        first_message,
         company_information,
         user_id
       `)
       .eq('id', widgetId)
-      .single();
+      .maybeSingle();
 
     if (botError || !botConfig) {
       return new Response(JSON.stringify({ error: 'Bot configuration not found' }), {
@@ -49,7 +48,6 @@ export async function GET(request: Request, { params }: { params: { widgetId: st
       tone: botConfig.tone,
       primary_color: botConfig.primary_color,
       welcome_message: botConfig.welcome_message,
-      first_message: botConfig.first_message,
       company_information: botConfig.company_information,
       // Include Supabase config if available (for RAG)
       hasKnowledgeBase: !!supabaseConfig,

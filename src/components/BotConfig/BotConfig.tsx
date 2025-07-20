@@ -8,11 +8,11 @@ export function BotConfig() {
   const { user } = useAuth();
   const [config, setConfig] = useState<Partial<BotConfigType>>({
     name: 'AI Assistant',
-    system_prompt: 'Du är en hjälpsam AI-assistent som svarar på svenska och hjälper användare med deras frågor.',
+    system_prompt: 'Du är en hjälpsam AI-assistent som svarar på svenska och hjälper användare med deras frågor. Svara alltid på svenska och var hjälpsam och professionell.',
     tone: 'friendly',
     primary_color: '#2563EB',
     welcome_message: 'Hej! Hur kan jag hjälpa dig idag?',
-    first_message: 'Välkommen! Jag är här för att hjälpa dig.',
+    company_information: '',
   });
 
   const [saving, setSaving] = useState(false);
@@ -20,6 +20,14 @@ export function BotConfig() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+
+  // Event emitter for real-time config updates
+  const emitConfigUpdate = (newConfig: Partial<BotConfigType>) => {
+    const event = new CustomEvent('botConfigUpdated', { 
+      detail: newConfig 
+    });
+    window.dispatchEvent(event);
+  };
 
   React.useEffect(() => {
     if (user) {
@@ -33,14 +41,19 @@ export function BotConfig() {
         .from('bot_configs')
         .select('*')
         .eq('user_id', user!.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
+        console.error('Error loading bot config:', error);
         throw error;
       }
 
       if (data) {
         setConfig(data);
+        emitConfigUpdate(data);
+      } else {
+        // No configuration exists yet, keep defaults
+        console.log('No bot configuration found, using defaults');
       }
     } catch (err) {
       console.error('Error loading bot config:', err);
@@ -81,10 +94,14 @@ export function BotConfig() {
 
         if (error) throw error;
         setConfig(data);
+        emitConfigUpdate(data);
       }
       
       setSuccess('Konfiguration sparad framgångsrikt!');
       setTimeout(() => setSuccess(''), 3000);
+      
+      // Emit real-time update
+      emitConfigUpdate(config);
     } catch (err) {
       console.error('Error saving bot config:', err);
       setError('Kunde inte spara konfigurationen');
@@ -206,7 +223,11 @@ export function BotConfig() {
                 <input
                   type="text"
                   value={config.name || ''}
-                  onChange={(e) => setConfig(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) => {
+                    const newConfig = { ...config, name: e.target.value };
+                    setConfig(newConfig);
+                    emitConfigUpdate(newConfig);
+                  }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                   placeholder="AI Assistant"
                 />
@@ -218,7 +239,11 @@ export function BotConfig() {
                 </label>
                 <textarea
                   value={config.welcome_message || ''}
-                  onChange={(e) => setConfig(prev => ({ ...prev, welcome_message: e.target.value }))}
+                  onChange={(e) => {
+                    const newConfig = { ...config, welcome_message: e.target.value };
+                    setConfig(newConfig);
+                    emitConfigUpdate(newConfig);
+                  }}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
                   placeholder="Hej! Hur kan jag hjälpa dig idag?"
@@ -227,15 +252,22 @@ export function BotConfig() {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  Första meddelande
+                  Företagsinformation
                 </label>
                 <textarea
-                  value={config.first_message || ''}
-                  onChange={(e) => setConfig(prev => ({ ...prev, first_message: e.target.value }))}
-                  rows={2}
+                  value={config.company_information || ''}
+                  onChange={(e) => {
+                    const newConfig = { ...config, company_information: e.target.value };
+                    setConfig(newConfig);
+                    emitConfigUpdate(newConfig);
+                  }}
+                  rows={4}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
-                  placeholder="Välkommen! Jag är här för att hjälpa dig."
+                  placeholder="Beskriv ditt företag, produkter, tjänster och annan relevant information som chatboten ska känna till..."
                 />
+                <p className="text-sm text-gray-500 mt-2">
+                  Denna information hjälper chatboten att ge mer relevanta och personliga svar om ditt företag.
+                </p>
               </div>
             </div>
           </div>
@@ -256,13 +288,21 @@ export function BotConfig() {
                   <input
                     type="color"
                     value={config.primary_color || '#2563EB'}
-                    onChange={(e) => setConfig(prev => ({ ...prev, primary_color: e.target.value }))}
+                    onChange={(e) => {
+                      const newConfig = { ...config, primary_color: e.target.value };
+                      setConfig(newConfig);
+                      emitConfigUpdate(newConfig);
+                    }}
                     className="w-16 h-12 border border-gray-300 rounded-lg cursor-pointer"
                   />
                   <input
                     type="text"
                     value={config.primary_color || '#2563EB'}
-                    onChange={(e) => setConfig(prev => ({ ...prev, primary_color: e.target.value }))}
+                    onChange={(e) => {
+                      const newConfig = { ...config, primary_color: e.target.value };
+                      setConfig(newConfig);
+                      emitConfigUpdate(newConfig);
+                    }}
                     className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                     placeholder="#2563EB"
                   />
@@ -272,7 +312,11 @@ export function BotConfig() {
                   {colorPresets.map((color) => (
                     <button
                       key={color}
-                      onClick={() => setConfig(prev => ({ ...prev, primary_color: color }))}
+                      onClick={() => {
+                        const newConfig = { ...config, primary_color: color };
+                        setConfig(newConfig);
+                        emitConfigUpdate(newConfig);
+                      }}
                       className={`w-10 h-10 rounded-lg border-2 transition-all duration-200 ${
                         config.primary_color === color ? 'border-gray-400 scale-110' : 'border-gray-200 hover:scale-105'
                       }`}
@@ -304,7 +348,11 @@ export function BotConfig() {
                         name="tone"
                         value={option.value}
                         checked={config.tone === option.value}
-                        onChange={(e) => setConfig(prev => ({ ...prev, tone: e.target.value as any }))}
+                        onChange={(e) => {
+                          const newConfig = { ...config, tone: e.target.value as any };
+                          setConfig(newConfig);
+                          emitConfigUpdate(newConfig);
+                        }}
                         className="sr-only"
                       />
                       <div className={`
@@ -333,7 +381,11 @@ export function BotConfig() {
                 </label>
                 <textarea
                   value={config.system_prompt || ''}
-                  onChange={(e) => setConfig(prev => ({ ...prev, system_prompt: e.target.value }))}
+                  onChange={(e) => {
+                    const newConfig = { ...config, system_prompt: e.target.value };
+                    setConfig(newConfig);
+                    emitConfigUpdate(newConfig);
+                  }}
                   rows={6}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none font-mono text-sm"
                   placeholder="Du är en hjälpsam AI-assistent som svarar på svenska och hjälper användare med deras frågor. Anpassa detta för att definiera botens beteende och expertområden."
@@ -380,7 +432,7 @@ export function BotConfig() {
                 <div className="flex justify-start">
                   <div className="bg-white rounded-lg p-3 max-w-xs border border-gray-200">
                     <p className="text-sm text-gray-900">
-                      {config.first_message || config.welcome_message || 'Hej! Hur kan jag hjälpa dig idag?'}
+                      {config.welcome_message || 'Hej! Hur kan jag hjälpa dig idag?'}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">12:34</p>
                   </div>

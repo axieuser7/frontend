@@ -26,12 +26,39 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
   const [config, setConfig] = useState(botConfig);
   const [ragService] = useState(new RAGService());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isConfigListening, setIsConfigListening] = useState(false);
 
   useEffect(() => {
     if (user && !config) {
       loadBotConfig();
     }
   }, [user, config]);
+
+  // Listen for real-time config updates
+  useEffect(() => {
+    const handleConfigUpdate = (event: CustomEvent) => {
+      const updatedConfig = event.detail;
+      setConfig(updatedConfig);
+      
+      // Update welcome message if it's the first message
+      if (messages.length === 1 && messages[0].id === 'welcome') {
+        setMessages([{
+          id: 'welcome',
+          content: updatedConfig.welcome_message || 'Hej! Hur kan jag hjälpa dig idag?',
+          isUser: false,
+          timestamp: new Date(),
+        }]);
+      }
+    };
+
+    window.addEventListener('botConfigUpdated', handleConfigUpdate as EventListener);
+    setIsConfigListening(true);
+
+    return () => {
+      window.removeEventListener('botConfigUpdated', handleConfigUpdate as EventListener);
+      setIsConfigListening(false);
+    };
+  }, [messages]);
 
   useEffect(() => {
     if (config && config.welcome_message) {
@@ -55,14 +82,29 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
         .from('bot_configs')
         .select('*') 
         .eq('user_id', user!.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
+        console.error('Error loading bot config:', error);
         throw error;
       }
       
       if (data) {
         setConfig(data);
+      } else {
+        // Use default configuration if none exists
+        setConfig({
+          id: '',
+          user_id: user!.id,
+          name: 'AI Assistant',
+          system_prompt: 'Du är en hjälpsam AI-assistent som svarar på svenska och hjälper användare med deras frågor.',
+          tone: 'friendly',
+          primary_color: '#2563EB',
+          welcome_message: 'Hej! Hur kan jag hjälpa dig idag?',
+          company_information: '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
       }
     } catch (error) {
       console.error('Error fetching bot config:', error);
@@ -169,7 +211,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
         </h3>
         <div className="ml-auto">
           <span className="text-xs bg-white/20 px-2 py-1 rounded">
-            {isLoading ? 'Skriver...' : 'Online'}
+            {isLoading ? 'Skriver...' : isConfigListening ? 'Live' : 'Online'}
           </span>
         </div>
       </div>

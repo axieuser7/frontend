@@ -31,13 +31,19 @@ export function WidgetGenerator({ userId }: WidgetGeneratorProps) {
         .from('bot_configs')
         .select('*')
         .eq('user_id', user!.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
+        console.error('Error loading bot config:', error);
         throw error;
       }
 
-      setBotConfig(data);
+      if (data) {
+        setBotConfig(data);
+      } else {
+        // No configuration exists yet
+        setBotConfig(null);
+      }
     } catch (err) {
       console.error('Error loading bot config:', err);
       setError('Kunde inte ladda bot-konfiguration');

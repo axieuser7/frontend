@@ -1,8 +1,8 @@
 // Application configuration
 export const config = {
   // Get the current domain from environment variables or fallback to current location
-  domain: import.meta.env.VITE_APP_DOMAIN || 'localhost:5173',
-  baseUrl: import.meta.env.VITE_APP_URL || 'http://localhost:5173',
+  domain: import.meta.env.VITE_APP_DOMAIN || 'frontenddk.netlify.app',
+  baseUrl: import.meta.env.VITE_APP_URL || 'https://frontenddk.netlify.app',
   
   // Supabase configuration
   supabase: {
@@ -20,8 +20,9 @@ export const config = {
   // CORS configuration
   cors: {
     allowedOrigins: [
-      import.meta.env.VITE_APP_URL || 'http://localhost:5173',
+      import.meta.env.VITE_APP_URL || 'https://frontenddk.netlify.app',
       'http://localhost:5173', // Always allow local development
+      'https://frontenddk.netlify.app', // Production domain
     ],
   },
 };
