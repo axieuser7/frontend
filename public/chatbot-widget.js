@@ -101,7 +101,7 @@
   function ChatWidget(props) {
     const {
       widgetId,
-      baseUrl = 'https://frontenddk.netlify.app',
+      baseUrl = window.location.origin.includes('localhost') ? 'http://localhost:5173' : 'https://frontenddk.netlify.app',
       position = 'bottom-right',
       sessionId = null,
       theme = {},
