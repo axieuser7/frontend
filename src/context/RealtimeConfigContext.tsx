@@ -1,12 +1,15 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { userSupabaseService } from '../lib/userSupabaseService';
 import { useAuth } from './AuthContext';
-import { BotConfig } from '../types';
+import { BotConfig, SupabaseConfig } from '../types';
 
 interface RealtimeConfigContextType {
   botConfig: BotConfig | null;
   updateConfig: (config: Partial<BotConfig>) => Promise<void>;
+  saveToUserSupabase: boolean;
+  setSaveToUserSupabase: (save: boolean) => void;
   isConnected: boolean;
   lastUpdate: Date | null;
   loading: boolean;
@@ -18,12 +21,51 @@ const RealtimeConfigContext = createContext<RealtimeConfigContextType | undefine
 export function RealtimeConfigProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [botConfig, setBotConfig] = useState<BotConfig | null>(null);
+  const [saveToUserSupabase, setSaveToUserSupabase] = useState(false);
+  const [userSupabaseConfig, setUserSupabaseConfig] = useState<SupabaseConfig | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [channel, setChannel] = useState<RealtimeChannel | null>(null);
 
+  // Load user's Supabase config to determine save preference
+  useEffect(() => {
+    if (user) {
+      loadUserSupabaseConfig();
+    }
+  }, [user]);
+
+  const loadUserSupabaseConfig = async () => {
+    try {
+      const { data } = await supabase
+        .from('supabase_configs')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (data) {
+        setUserSupabaseConfig(data);
+        setSaveToUserSupabase(true);
+        
+        // Try to load config from user's Supabase
+        const userConfig = await userSupabaseService.loadBotConfigFromUserSupabase(data, user!.id);
+        if (userConfig) {
+          setBotConfig(userConfig);
+          setLastUpdate(new Date());
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (error) {
+      console.log('No user Supabase config found, using main database');
+    }
+    
+    // Fallback to main database
+    loadInitialConfig();
+  };
   // Load initial config
   const loadInitialConfig = useCallback(async () => {
     if (!user) {
@@ -133,6 +175,19 @@ export function RealtimeConfigProvider({ children }: { children: React.ReactNode
     }
 
     try {
+      // Save to user's Supabase if configured
+      if (saveToUserSupabase && userSupabaseConfig) {
+        const updatedConfig = await userSupabaseService.saveBotConfigToUserSupabase(
+          userSupabaseConfig,
+          configUpdate,
+          user.id
+        );
+        setBotConfig(updatedConfig);
+        setLastUpdate(new Date());
+        return;
+      }
+
+      // Fallback to main database
       if (botConfig?.id) {
         // Update existing config
         const updatedConfig = {
@@ -182,12 +237,14 @@ export function RealtimeConfigProvider({ children }: { children: React.ReactNode
       console.error('Error in updateConfig:', err);
       throw err;
     }
-  }, [user, botConfig]);
+  }, [user, botConfig, saveToUserSupabase, userSupabaseConfig]);
 
   return (
     <RealtimeConfigContext.Provider value={{
       botConfig,
       updateConfig,
+      saveToUserSupabase,
+      setSaveToUserSupabase,
       isConnected,
       lastUpdate,
       loading,
