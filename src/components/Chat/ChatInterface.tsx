@@ -133,26 +133,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
         throw new Error('Bot-konfiguration saknas');
       }
 
-      // Get user's API key
-      const { data: apiKey, error: apiError } = await supabase
-        .from('api_keys')
-        .select('provider, key_encrypted')
-        .eq('user_id', user!.id)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-        .single();
-
-      if (apiError || !apiKey) {
-        throw new Error('Ingen aktiv API-nyckel hittades. Lägg till en API-nyckel först.');
-      }
-      
-      // Use RAG service for enhanced responses
+      // Use RAG service for enhanced responses with user's own credentials
       const response = await ragService.enhancedContextualResponse(
         inputValue,
         config,
-        user!.id,
-        apiKey.key_encrypted,
-        apiKey.provider as 'openai' | 'claude' | 'groq'
+        user!.id
       );
 
       const botMessage: Message = {
@@ -169,7 +154,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ widgetId, botConfi
       
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: 'Ursäkta, jag stötte på ett fel. Försök igen senare.',
+        content: error instanceof Error && error.message.includes('API-nycklar') 
+          ? 'Inga AI API-nycklar är konfigurerade. Gå till "API-nycklar" för att lägga till dina nycklar.'
+          : 'Ursäkta, jag stötte på ett fel. Försök igen senare.',
         isUser: false,
         timestamp: new Date(),
       };

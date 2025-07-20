@@ -32,40 +32,14 @@ export async function POST(request: Request, { params }: { params: { widgetId: s
       });
     }
 
-    // Fetch user's API key for the LLM
-    const { data: apiKey, error: apiError } = await supabase
-      .from('api_keys')
-      .select('provider, key_encrypted')
-      .eq('user_id', botConfig.user_id)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .single();
-
-    if (apiError || !apiKey) {
-      return new Response(JSON.stringify({ 
-        error: 'No active API key found',
-        response: 'Ursäkta, ingen aktiv AI-tjänst är konfigurerad för denna chatbot. Kontakta administratören.'
-      }), {
-        status: 400,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-        },
-      });
-    }
-
     // Initialize RAG service
     const ragService = new RAGService();
 
-    // Generate enhanced contextual response using RAG
+    // Generate enhanced contextual response using user's own credentials
     const response = await ragService.enhancedContextualResponse(
       message,
       botConfig,
-      botConfig.user_id,
-      apiKey.key_encrypted, // In production, decrypt this
-      apiKey.provider as 'openai' | 'claude' | 'groq'
+      botConfig.user_id
     );
 
     // Save chat history if session ID provided
@@ -107,15 +81,34 @@ export async function POST(request: Request, { params }: { params: { widgetId: s
       }
     }
 
+    // Determine which provider was used (for metadata)
+    let usedProvider = 'unknown';
+    try {
+      // Try to determine which provider was used by checking available API keys
+      const { data: apiKeys } = await supabase
+        .from('api_keys')
+        .select('provider')
+        .eq('user_id', botConfig.user_id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      
+      if (apiKeys && apiKeys.length > 0) {
+        usedProvider = apiKeys[0].provider;
+      }
+    } catch (error) {
+      console.warn('Could not determine used provider:', error);
+    }
+
     // Return enhanced response with metadata
     const responseData = {
       response,
       metadata: {
         botName: botConfig.name,
         timestamp: new Date().toISOString(),
-        provider: apiKey.provider,
+        provider: usedProvider,
         sessionId: sessionId || null,
         hasKnowledgeBase: true, // Will be determined by RAG service
+        usesUserCredentials: true,
       }
     };
 
@@ -135,10 +128,13 @@ export async function POST(request: Request, { params }: { params: { widgetId: s
     // Enhanced error response
     const errorResponse = {
       error: 'Failed to process message',
-      response: 'Ursäkta, jag kunde inte behandla din förfrågan just nu. Försök igen senare.',
+      response: error instanceof Error && error.message.includes('API-nycklar')
+        ? 'Inga AI API-nycklar är konfigurerade för denna chatbot. Kontakta administratören.'
+        : 'Ursäkta, jag kunde inte behandla din förfrågan just nu. Försök igen senare.',
       metadata: {
         timestamp: new Date().toISOString(),
         errorType: error instanceof Error ? error.constructor.name : 'UnknownError',
+        usesUserCredentials: true,
       }
     }
 
