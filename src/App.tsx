@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { RealtimeConfigProvider } from './context/RealtimeConfigContext';
 import { LoginForm } from './components/Auth/LoginForm';
 import { Dashboard } from './components/Dashboard/Dashboard';
 
@@ -51,27 +52,29 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          <Route 
-            path="/login" 
-            element={
-              <PublicRoute>
-                <LoginForm />
-              </PublicRoute>
-            } 
-          />
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </Router>
+      <RealtimeConfigProvider>
+        <Router>
+          <Routes>
+            <Route 
+              path="/login" 
+              element={
+                <PublicRoute>
+                  <LoginForm />
+                </PublicRoute>
+              } 
+            />
+            <Route 
+              path="/dashboard" 
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </Router>
+      </RealtimeConfigProvider>
     </AuthProvider>
   );
 }
