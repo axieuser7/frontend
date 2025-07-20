@@ -1,31 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useRealtimeConfig } from '../../context/RealtimeConfigContext';
-import { supabase } from '../../lib/supabase';
-import { Save, Palette, MessageCircle, User, Sparkles, Brain, Zap, Eye } from 'lucide-react';
+import { Save, Palette, MessageCircle, User, Sparkles, Brain, Zap, Eye, AlertCircle } from 'lucide-react';
 import { BotConfig as BotConfigType } from '../../types';
 
 export function BotConfig() {
   const { user } = useAuth();
-  const { botConfig: realtimeConfig, updateConfig, isConnected } = useRealtimeConfig();
+  const { botConfig: realtimeConfig, updateConfig, isConnected, loading, error: contextError } = useRealtimeConfig();
   
   const [localConfig, setLocalConfig] = useState<Partial<BotConfigType>>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   
-  // Merge real-time config with local changes
-  const config = {
+  // Default configuration
+  const defaultConfig = {
     name: 'AI Assistant',
     system_prompt: 'Du är en hjälpsam AI-assistent som svarar på svenska och hjälper användare med deras frågor. Svara alltid på svenska och var hjälpsam och professionell.',
     tone: 'friendly' as const,
     primary_color: '#2563EB',
     welcome_message: 'Hej! Hur kan jag hjälpa dig idag?',
     company_information: '',
+  };
+
+  // Merge real-time config with local changes and defaults
+  const config = {
+    ...defaultConfig,
     ...realtimeConfig,
     ...localConfig,
   };
@@ -42,14 +44,13 @@ export function BotConfig() {
     window.dispatchEvent(event);
   };
 
-  React.useEffect(() => {
-    // Reset loading when real-time config is available or when user changes
-    if (realtimeConfig !== null || !user) {
-      setLoading(false);
+  // Reset local changes when real-time config changes
+  useEffect(() => {
+    if (realtimeConfig) {
       setLocalConfig({});
       setHasUnsavedChanges(false);
     }
-  }, [realtimeConfig, user]);
+  }, [realtimeConfig]);
 
   const handleSave = async () => {
     if (!user) return;
@@ -59,24 +60,7 @@ export function BotConfig() {
     setSuccess('');
 
     try {
-      if (realtimeConfig?.id) {
-        // Update existing config
-        await updateConfig(localConfig);
-      } else {
-        // Create new config
-        const configData = {
-          ...config,
-          user_id: user.id,
-        };
-        
-        const { data, error } = await supabase
-          .from('bot_configs')
-          .insert([configData])
-          .select()
-          .single();
-
-        if (error) throw error;
-      }
+      await updateConfig(localConfig);
       
       setLocalConfig({});
       setHasUnsavedChanges(false);
@@ -95,28 +79,28 @@ export function BotConfig() {
       value: 'friendly', 
       label: 'Vänlig', 
       description: 'Varm och tillmötesgående',
-      icon: 'Friendly',
+      icon: '😊',
       color: 'bg-green-100 text-green-800'
     },
     { 
       value: 'professional', 
       label: 'Professionell', 
       description: 'Formell och saklig',
-      icon: 'Professional',
+      icon: '💼',
       color: 'bg-blue-100 text-blue-800'
     },
     { 
       value: 'casual', 
       label: 'Avslappnad', 
       description: 'Informell och ledig',
-      icon: 'Casual',
+      icon: '👋',
       color: 'bg-purple-100 text-purple-800'
     },
     { 
       value: 'formal', 
       label: 'Formell', 
       description: 'Strikt och korrekt',
-      icon: 'Formal',
+      icon: '🎩',
       color: 'bg-gray-100 text-gray-800'
     },
   ];
@@ -185,9 +169,11 @@ export function BotConfig() {
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-          <p className="text-red-700 text-sm">{error}</p>
+      {/* Error Messages */}
+      {(error || contextError) && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center">
+          <AlertCircle className="w-5 h-5 text-red-500 mr-3 flex-shrink-0" />
+          <span className="text-red-700 text-sm">{error || contextError}</span>
         </div>
       )}
         
@@ -215,9 +201,7 @@ export function BotConfig() {
                 <input
                   type="text"
                   value={config.name || ''}
-                  onChange={(e) => {
-                    handleConfigChange({ name: e.target.value });
-                  }}
+                  onChange={(e) => handleConfigChange({ name: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                   placeholder="AI Assistant"
                 />
@@ -229,9 +213,7 @@ export function BotConfig() {
                 </label>
                 <textarea
                   value={config.welcome_message || ''}
-                  onChange={(e) => {
-                    handleConfigChange({ welcome_message: e.target.value });
-                  }}
+                  onChange={(e) => handleConfigChange({ welcome_message: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
                   placeholder="Hej! Hur kan jag hjälpa dig idag?"
@@ -244,9 +226,7 @@ export function BotConfig() {
                 </label>
                 <textarea
                   value={config.company_information || ''}
-                  onChange={(e) => {
-                    handleConfigChange({ company_information: e.target.value });
-                  }}
+                  onChange={(e) => handleConfigChange({ company_information: e.target.value })}
                   rows={4}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
                   placeholder="Beskriv ditt företag, produkter, tjänster och annan relevant information som chatboten ska känna till..."
@@ -274,17 +254,13 @@ export function BotConfig() {
                   <input
                     type="color"
                     value={config.primary_color || '#2563EB'}
-                    onChange={(e) => {
-                      handleConfigChange({ primary_color: e.target.value });
-                    }}
+                    onChange={(e) => handleConfigChange({ primary_color: e.target.value })}
                     className="w-16 h-12 border border-gray-300 rounded-lg cursor-pointer"
                   />
                   <input
                     type="text"
                     value={config.primary_color || '#2563EB'}
-                    onChange={(e) => {
-                      handleConfigChange({ primary_color: e.target.value });
-                    }}
+                    onChange={(e) => handleConfigChange({ primary_color: e.target.value })}
                     className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                     placeholder="#2563EB"
                   />
@@ -294,9 +270,7 @@ export function BotConfig() {
                   {colorPresets.map((color) => (
                     <button
                       key={color}
-                      onClick={() => {
-                        handleConfigChange({ primary_color: color });
-                      }}
+                      onClick={() => handleConfigChange({ primary_color: color })}
                       className={`w-10 h-10 rounded-lg border-2 transition-all duration-200 ${
                         config.primary_color === color ? 'border-gray-400 scale-110' : 'border-gray-200 hover:scale-105'
                       }`}
@@ -328,9 +302,7 @@ export function BotConfig() {
                         name="tone"
                         value={option.value}
                         checked={config.tone === option.value}
-                        onChange={(e) => {
-                          handleConfigChange({ tone: e.target.value as any });
-                        }}
+                        onChange={(e) => handleConfigChange({ tone: e.target.value as any })}
                         className="sr-only"
                       />
                       <div className={`
@@ -341,7 +313,7 @@ export function BotConfig() {
                         }
                       `}>
                         <div className="flex items-center space-x-3">
-                          <span className="text-sm font-medium px-2 py-1 rounded bg-gray-100">{option.icon}</span>
+                          <span className="text-2xl">{option.icon}</span>
                           <div>
                             <div className="font-semibold text-gray-900">{option.label}</div>
                             <div className="text-sm text-gray-600">{option.description}</div>
@@ -359,9 +331,7 @@ export function BotConfig() {
                 </label>
                 <textarea
                   value={config.system_prompt || ''}
-                  onChange={(e) => {
-                    handleConfigChange({ system_prompt: e.target.value });
-                  }}
+                  onChange={(e) => handleConfigChange({ system_prompt: e.target.value })}
                   rows={6}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none font-mono text-sm"
                   placeholder="Du är en hjälpsam AI-assistent som svarar på svenska och hjälper användare med deras frågor. Anpassa detta för att definiera botens beteende och expertområden."

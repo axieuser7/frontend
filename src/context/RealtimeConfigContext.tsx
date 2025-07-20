@@ -6,9 +6,11 @@ import { BotConfig } from '../types';
 
 interface RealtimeConfigContextType {
   botConfig: BotConfig | null;
-  updateConfig: (config: Partial<BotConfig>) => void;
+  updateConfig: (config: Partial<BotConfig>) => Promise<void>;
   isConnected: boolean;
   lastUpdate: Date | null;
+  loading: boolean;
+  error: string | null;
 }
 
 const RealtimeConfigContext = createContext<RealtimeConfigContextType | undefined>(undefined);
@@ -18,30 +20,44 @@ export function RealtimeConfigProvider({ children }: { children: React.ReactNode
   const [botConfig, setBotConfig] = useState<BotConfig | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [channel, setChannel] = useState<RealtimeChannel | null>(null);
 
   // Load initial config
   const loadInitialConfig = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setBotConfig(null);
+      setLoading(false);
+      return;
+    }
 
     try {
-      const { data, error } = await supabase
+      setLoading(true);
+      setError(null);
+      
+      console.log('Loading bot config for user:', user.id);
+      
+      const { data, error: fetchError } = await supabase
         .from('bot_configs')
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (error) {
-        console.error('Error loading bot config:', error);
+      if (fetchError) {
+        console.error('Error loading bot config:', fetchError);
+        setError('Failed to load configuration');
         return;
       }
 
-      if (data) {
-        setBotConfig(data);
-        setLastUpdate(new Date());
-      }
+      console.log('Loaded bot config:', data);
+      setBotConfig(data);
+      setLastUpdate(new Date());
     } catch (err) {
       console.error('Error in loadInitialConfig:', err);
+      setError('Failed to load configuration');
+    } finally {
+      setLoading(false);
     }
   }, [user]);
 
@@ -50,9 +66,15 @@ export function RealtimeConfigProvider({ children }: { children: React.ReactNode
     if (!user) {
       setBotConfig(null);
       setIsConnected(false);
+      setLoading(false);
+      if (channel) {
+        supabase.removeChannel(channel);
+        setChannel(null);
+      }
       return;
     }
 
+    // Load initial config
     loadInitialConfig();
 
     // Create real-time channel
@@ -106,29 +128,59 @@ export function RealtimeConfigProvider({ children }: { children: React.ReactNode
 
   // Update config function
   const updateConfig = useCallback(async (configUpdate: Partial<BotConfig>) => {
-    if (!user || !botConfig) return;
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
 
     try {
-      const updatedConfig = {
-        ...botConfig,
-        ...configUpdate,
-        updated_at: new Date().toISOString(),
-      };
+      if (botConfig?.id) {
+        // Update existing config
+        const updatedConfig = {
+          ...configUpdate,
+          updated_at: new Date().toISOString(),
+        };
 
-      const { error } = await supabase
-        .from('bot_configs')
-        .update(updatedConfig)
-        .eq('id', botConfig.id)
-        .eq('user_id', user.id);
+        const { error } = await supabase
+          .from('bot_configs')
+          .update(updatedConfig)
+          .eq('id', botConfig.id)
+          .eq('user_id', user.id);
 
-      if (error) {
-        console.error('Error updating config:', error);
-        return;
+        if (error) {
+          console.error('Error updating config:', error);
+          throw error;
+        }
+      } else {
+        // Create new config
+        const newConfig = {
+          user_id: user.id,
+          name: 'AI Assistant',
+          system_prompt: 'Du är en hjälpsam AI-assistent som svarar på svenska och hjälper användare med deras frågor.',
+          tone: 'friendly' as const,
+          primary_color: '#2563EB',
+          welcome_message: 'Hej! Hur kan jag hjälpa dig idag?',
+          company_information: '',
+          ...configUpdate,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        const { data, error } = await supabase
+          .from('bot_configs')
+          .insert([newConfig])
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error creating config:', error);
+          throw error;
+        }
+
+        setBotConfig(data);
       }
-
-      // The real-time subscription will handle the state update
     } catch (err) {
       console.error('Error in updateConfig:', err);
+      throw err;
     }
   }, [user, botConfig]);
 
@@ -138,6 +190,8 @@ export function RealtimeConfigProvider({ children }: { children: React.ReactNode
       updateConfig,
       isConnected,
       lastUpdate,
+      loading,
+      error,
     }}>
       {children}
     </RealtimeConfigContext.Provider>
